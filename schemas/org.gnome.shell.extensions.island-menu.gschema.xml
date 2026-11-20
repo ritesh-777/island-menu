@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.island-menu" path="/org/gnome/shell/extensions/island-menu/">
+    <key name="super-key-opens-menu" type="b">
+      <default>false</default>
+      <summary>Super key opens the menu</summary>
+      <description>A tap of Super opens Island Menu instead of GNOME's overview. The overview stays on the Activities button, the hot corner and Super+A.</description>
+    </key>
+    <key name="menu-shortcut-enabled" type="b">
+      <default>true</default>
+      <summary>Keyboard shortcut</summary>
+      <description>Open the menu with the keyboard shortcut below.</description>
+    </key>
+    <key name="menu-shortcut" type="as">
+      <default>['&lt;Super&gt;space']</default>
+      <summary>Keyboard shortcut</summary>
+      <description>The shortcut that opens the menu.</description>
+    </key>
+    <key name="menu-show-panel-icon" type="b">
+      <default>true</default>
+      <summary>Top bar button</summary>
+      <description>A launcher button in the top bar.</description>
+    </key>
+    <key name="menu-panel-icon" type="s">
+      <choices>
+        <choice value="system"/>
+        <choice value="grid"/>
+      </choices>
+      <default>'system'</default>
+      <summary>Top bar icon</summary>
+      <description>system: the logo of the system it runs on (Ubuntu's, Fedora's…), found on the system and drawn black or white as the bar's text is. grid: the app grid.</description>
+    </key>
+    <key name="menu-panel-icon-placement" type="s">
+      <choices>
+        <choice value="before-workspaces"/>
+        <choice value="after-workspaces"/>
+      </choices>
+      <default>'before-workspaces'</default>
+      <summary>Top bar button placement</summary>
+      <description>Before or after the workspace buttons.</description>
+    </key>
+    <key name="menu-default-search-engine" type="s">
+      <choices>
+        <choice value="duckduckgo"/>
+        <choice value="google"/>
+        <choice value="bing"/>
+      </choices>
+      <default>'duckduckgo'</default>
+      <summary>Web search engine</summary>
+      <description>The engine "? query" searches with.</description>
+    </key>
+    <key name="color-style" type="s">
+      <choices>
+        <choice value="auto"/>
+        <choice value="light"/>
+        <choice value="dark"/>
+      </choices>
+      <default>'auto'</default>
+      <summary>Style</summary>
+      <description>auto: light or dark as GNOME's own style is (Settings → Appearance). light: frosted light glass, dark text. dark: smoked glass, light text.</description>
+    </key>
+    <key name="alt-tab-opens-menu" type="b">
+      <default>false</default>
+      <summary>Alt+Tab and Super+Tab open the menu</summary>
+      <description>Alt+Tab and Super+Tab show the menu's open windows instead of GNOME's switchers: held, Tab steps through them, let go, the one chosen is gone to. Only the shortcut's handler inside the shell is changed, never a keyboard setting; turned off, GNOME's switcher has it again.</description>
+    </key>
+    <key name="open-at-login" type="b">
+      <default>false</default>
+      <summary>Open the menu at login</summary>
+      <description>At login, the desktop with the menu open (Settings → At login: Island Menu). Overview or desktop at login is GNOME's own setting (org.gnome.shell start-in-overview), which the settings window sets.</description>
+    </key>
+    <key name="open-on-empty-workspace" type="b">
+      <default>false</default>
+      <summary>Open on empty workspaces</summary>
+      <description>The menu opens by itself on a workspace with no windows (its last one closed, or an empty one gone to), and closes again as a window opens there. Not while Foresight Reborn, which opens the overview instead, is on.</description>
+    </key>
+    <key name="menu-animations-enabled" type="b">
+      <default>true</default>
+      <summary>Animations</summary>
+      <description>The menu animates as it opens and closes.</description>
+    </key>
+    <key name="menu-backdrop-dim-enabled" type="b">
+      <default>true</default>
+      <summary>Dim the screen</summary>
+      <description>The screen behind the menu dims while it is open.</description>
+    </key>
+    <key name="menu-enabled" type="b">
+      <default>true</default>
+      <summary>Menu</summary>
+      <description>Internal: the menu is on.</description>
+    </key>
+    <key name="menu-trigger" type="s">
+      <default>''</default>
+      <summary>Open the menu</summary>
+      <description>Internal trigger the settings window uses to open the menu.</description>
+    </key>
+    <key name="shelf-enabled" type="b">
+      <default>true</default>
+      <summary>Shelf</summary>
+      <description>A shelf for files, folders, links and snippets you deliberately keep at hand ("# " in the menu).</description>
+    </key>
+    <key name="shelf-show-in-menu" type="b">
+      <default>true</default>
+      <summary>Shelf in the menu</summary>
+      <description>Show the Shelf's items and actions in the menu.</description>
+    </key>
+    <key name="shelf-persist" type="b">
+      <default>true</default>
+      <summary>Keep the Shelf</summary>
+      <description>Keep the Shelf's items after logging out.</description>
+    </key>
+    <key name="shelf-max-items" type="i">
+      <range min="4" max="80"/>
+      <default>24</default>
+      <summary>Shelf size</summary>
+      <description>How many items the Shelf keeps.</description>
+    </key>
+    <key name="shelf-show-notifications" type="b">
+      <default>true</default>
+      <summary>Shelf notifications</summary>
+      <description>Notifications for what the Shelf does.</description>
+    </key>
+    <key name="shelf-trigger-clear" type="s">
+      <default>''</default>
+      <summary>Clear the Shelf</summary>
+      <description>Internal trigger the settings window uses to clear the Shelf.</description>
+    </key>
+    <key name="shelf-imported" type="b">
+      <default>false</default>
+      <summary>Shelf brought over</summary>
+      <description>Internal: GNOME Essentials' Shelf has been copied over once.</description>
+    </key>
+    <key name="uninstall-in-menu" type="b">
+      <default>true</default>
+      <summary>Uninstall from the menu</summary>
+      <description>An Uninstall action on apps found in the menu.</description>
+    </key>
+    <key name="uninstall-enabled" type="b">
+      <default>true</default>
+      <summary>Uninstall</summary>
+      <description>Internal: uninstalling apps is available.</description>
+    </key>
+    <key name="workspace-peek" type="b">
+      <default>true</default>
+      <summary>Workspace peek</summary>
+      <description>The pointer resting on Panel Island's left capsule's workspace buttons grows it into glass with a live preview of each workspace: click one to go there, drag a window onto one to move it there.</description>
+    </key>
+    <key name="workspace-numbers" type="b">
+      <default>false</default>
+      <summary>Workspace numbers</summary>
+      <description>Island Menu's own workspace buttons in Panel Island's left capsule, one per workspace: click one to go there, drop a window or an app icon on one.</description>
+    </key>
+    <key name="drag-to-workspaces" type="b">
+      <default>true</default>
+      <summary>Drag to workspaces</summary>
+      <description>A window moved by its title bar, or an app icon, held over Panel Island's left capsule opens the workspace peek; let go on a preview or a number, it goes to that workspace.</description>
+    </key>
+    <key name="peek-delay" type="i">
+      <range min="100" max="2000"/>
+      <default>400</default>
+      <summary>Workspace peek delay</summary>
+      <description>How long the pointer rests on a workspace button before the peek opens, in milliseconds.</description>
+    </key>
+    <key name="attention-glow" type="b">
+      <default>true</default>
+      <summary>Attention glow</summary>
+      <description>Panel Island's left capsule's edge glows in the accent colour while a window on another workspace asks for attention.</description>
+    </key>
+    <key name="glow-width" type="d">
+      <range min="0.5" max="6"/>
+      <default>1</default>
+      <summary>Attention glow width</summary>
+      <description>How wide the glowing line round the capsule is, in pixels; a soft glow reaches a little further in.</description>
+    </key>
+    <key name="attention-pulse" type="b">
+      <default>true</default>
+      <summary>Attention glow pulse</summary>
+      <description>The glow slowly breathes in and out instead of staying lit.</description>
+    </key>
+    <key name="workspaces-imported" type="b">
+      <default>false</default>
+      <summary>Workspace settings brought over</summary>
+      <description>Internal: Panel Island's workspace settings (from before these features moved here) were brought over.</description>
+    </key>
+  </schema>
+</schemalist>

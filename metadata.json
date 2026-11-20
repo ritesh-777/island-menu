@@ -1,0 +1,11 @@
+{
+  "uuid": "island-menu@ritesh",
+  "name": "Island Menu",
+  "description": "A launcher and window switcher for the top bar: your open windows first, search for apps, Settings pages, system actions and files that forgives typos, Alt+Tab and Super+Tab, close and kill, a Shelf for what you keep at hand, and workspace previews in Panel Island's capsule. Opens from the top bar, a shortcut, the Super key or Alt+Tab, without going into the overview.",
+  "shell-version": [
+    "51"
+  ],
+  "url": "https://github.com/ritesh-777/island-menu",
+  "version-name": "1.0",
+  "settings-schema": "org.gnome.shell.extensions.island-menu"
+}

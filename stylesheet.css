@@ -1,0 +1,417 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+   Copyright (C) 2026 Ritesh Seth
+   Island Menu: the menu's look, on glass (Panel Island's or its own), as GNOME 51 draws its own: soft rounded
+   fields, a focus ring and the selection in the system's accent colour (-st-accent-color, with GNOME's own
+   st-transparentize), no drop shadows (St draws them square round a rounded field). */
+
+.essential-menu-panel-button {
+    padding-left: 3px;
+    padding-right: 3px;
+    min-width: 24px;
+}
+
+/* The menu's button in the bar: its icon in a thin ring, light on a dark bar, dark on Panel Island's light capsule;
+   a faint fill under the pointer and while the menu is open. */
+.island-menu-panel-ring {
+    border: 1px solid rgba(255, 255, 255, 0.32);
+    border-radius: 99px;
+    padding: 2px 7px;
+    transition-duration: 150ms;
+}
+.essential-menu-panel-button:hover .island-menu-panel-ring,
+.essential-menu-panel-button:active .island-menu-panel-ring,
+.essential-menu-panel-button:checked .island-menu-panel-ring {
+    background-color: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.45);
+}
+#panel.panel-island-light-left .island-menu-panel-ring {
+    border-color: rgba(0, 0, 0, 0.24);
+}
+#panel.panel-island-light-left .essential-menu-panel-button:hover .island-menu-panel-ring,
+#panel.panel-island-light-left .essential-menu-panel-button:active .island-menu-panel-ring,
+#panel.panel-island-light-left .essential-menu-panel-button:checked .island-menu-panel-ring {
+    background-color: rgba(0, 0, 0, 0.07);
+    border-color: rgba(0, 0, 0, 0.34);
+}
+
+.profiles-rename-dialog StEntry {
+    min-width: 320px;
+    margin-top: 12px;
+}
+
+/* The launcher: the glass is its background and edge. */
+.essential-menu-launcher {
+    border-radius: 16px !important;
+    box-shadow: none !important;
+    padding: 12px 12px 14px 12px !important;
+}
+
+.essential-menu-launcher:drop {
+    box-shadow: inset 0 0 0 2px st-transparentize(-st-accent-color, 0.2) !important;
+}
+
+/* The search field: soft, rounded; focused, ringed in the accent colour inside its own corners. */
+.essential-menu-search-entry {
+    background-color: rgba(255, 255, 255, 0.08) !important;
+    border: none !important;
+    border-radius: 12px !important;
+    padding: 9px 14px !important;
+    min-height: 40px !important;
+    color: #ffffff !important;
+    caret-color: #ffffff;
+    selection-background-color: st-transparentize(-st-accent-color, 0.35) !important;
+    selected-color: #ffffff !important;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06) !important;
+    transition-duration: 150ms;
+}
+
+.essential-menu-search-entry:hover {
+    background-color: rgba(255, 255, 255, 0.10) !important;
+}
+
+.essential-menu-search-entry:focus,
+.essential-menu-search-entry:focused {
+    background-color: rgba(255, 255, 255, 0.12) !important;
+    box-shadow: inset 0 0 0 2px st-transparentize(-st-accent-color, 0.25) !important;
+}
+
+.essential-menu-search-entry StLabel.hint-text {
+    color: rgba(255, 255, 255, 0.45) !important;
+}
+
+/* Results: rounded rows; under the pointer a soft lift, selected tinted with the accent colour. */
+.essential-menu-results-box {
+    spacing: 2px;
+    padding-bottom: 6px;
+}
+
+.essential-menu-result {
+    background-color: transparent;
+    border: none !important;
+    border-radius: 10px;
+    padding: 8px 10px;
+    color: #f2f2f2;
+    box-shadow: none !important;
+    transition-duration: 120ms;
+}
+
+.essential-menu-result:hover {
+    background-color: rgba(255, 255, 255, 0.07);
+}
+
+.essential-menu-result-selected,
+.essential-menu-result-selected:hover {
+    background-color: st-transparentize(-st-accent-color, 0.55) !important;
+    box-shadow: inset 0 0 0 1px st-transparentize(-st-accent-color, 0.35) !important;
+    color: #ffffff !important;
+}
+
+.essential-menu-result:drop {
+    background-color: st-transparentize(-st-accent-color, 0.7) !important;
+    box-shadow: inset 0 0 0 2px st-transparentize(-st-accent-color, 0.2) !important;
+}
+
+/* The mode hints under the results: pills, their prefix in the accent colour. */
+.island-menu-hint {
+    padding: 3px 10px;
+    border-radius: 99px;
+    background-color: rgba(255, 255, 255, 0.06);
+    transition-duration: 120ms;
+}
+
+.island-menu-hint:hover,
+.island-menu-hint:focus {
+    background-color: rgba(255, 255, 255, 0.12);
+}
+
+.island-menu-hint:active {
+    background-color: st-transparentize(-st-accent-color, 0.6);
+}
+
+.island-menu-hint-prefix {
+    font-weight: bold;
+    font-size: 11px;
+    color: st-lighten(-st-accent-color, 20%);
+}
+
+.island-menu-hint-label {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.64);
+}
+
+/* Settings → Style, light: the same, for frosted light glass, in GNOME's light colours (its text black at 80%). */
+.essential-menu-light .essential-menu-search-entry {
+    background-color: rgba(0, 0, 0, 0.06) !important;
+    color: rgba(0, 0, 0, 0.8) !important;
+    caret-color: rgba(0, 0, 0, 0.8);
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06) !important;
+}
+
+.essential-menu-light .essential-menu-search-entry:hover {
+    background-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+.essential-menu-light .essential-menu-search-entry:focus,
+.essential-menu-light .essential-menu-search-entry:focused {
+    background-color: rgba(255, 255, 255, 0.6) !important;
+    box-shadow: inset 0 0 0 2px st-transparentize(-st-accent-color, 0.25) !important;
+}
+
+.essential-menu-light .essential-menu-search-entry StLabel.hint-text {
+    color: rgba(0, 0, 0, 0.45) !important;
+}
+
+.essential-menu-light .essential-menu-result {
+    color: rgba(0, 0, 0, 0.8);
+}
+
+.essential-menu-light .essential-menu-result:hover {
+    background-color: rgba(0, 0, 0, 0.06);
+}
+
+.essential-menu-light .essential-menu-result-selected,
+.essential-menu-light .essential-menu-result-selected:hover {
+    background-color: st-transparentize(-st-accent-color, 0.7) !important;
+    box-shadow: inset 0 0 0 1px st-transparentize(-st-accent-color, 0.4) !important;
+    color: rgba(0, 0, 0, 0.9) !important;
+}
+
+.essential-menu-light .island-menu-hint {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.essential-menu-light .island-menu-hint:hover,
+.essential-menu-light .island-menu-hint:focus {
+    background-color: rgba(0, 0, 0, 0.1);
+}
+
+.essential-menu-light .island-menu-hint-prefix {
+    color: st-darken(-st-accent-color, 10%);
+}
+
+.essential-menu-light .island-menu-hint-label {
+    color: rgba(0, 0, 0, 0.6);
+}
+
+/* Settings → Workspace peek (peek.js): each workspace's preview, framed; the one shown in the accent colour, one
+   wanting attention glowing in it. */
+.island-menu-peek-workspace {
+    border-radius: 8px;
+}
+.island-menu-peek-frame {
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+}
+.island-menu-peek-frame.island-menu-peek-current {
+    border: 2px solid -st-accent-color;
+}
+.island-menu-peek-frame.island-menu-peek-urgent {
+    border: 2px solid rgba(255, 255, 255, 0.9);
+    box-shadow: inset 0 0 10px 2px -st-accent-color;
+}
+.island-menu-peek-frame.island-menu-peek-current.island-menu-peek-urgent {
+    border: 2px solid -st-accent-color;
+}
+
+/* A window or app icon dragged over a preview: where it would go. */
+.island-menu-peek-frame.island-menu-peek-hot {
+    border: 2px solid rgba(255, 255, 255, 0.95);
+    background-color: rgba(255, 255, 255, 0.12);
+}
+
+/* Settings → Workspace numbers (numbers.js): Island Menu's own, in Panel Island's left capsule. Empty ones dim, ones holding
+   windows brighter, the one shown filled in the accent colour, one wanting attention ringed in it, one a window is
+   dragged onto lit. */
+.island-menu-ws {
+    spacing: 3px;
+}
+#panel .panel-button.island-menu-ws-button {
+    -natural-hpadding: 6px;
+    -minimum-hpadding: 4px;
+}
+.island-menu-ws-number {
+    min-width: 20px;
+    min-height: 20px;
+    padding: 0 6px;
+    border-radius: 99px;
+    font-size: 12px;
+    font-weight: bold;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.45);
+    transition-duration: 150ms;
+}
+.island-menu-ws-number.island-menu-ws-occupied {
+    color: rgba(255, 255, 255, 0.9);
+}
+.island-menu-ws-number:hover {
+    background-color: rgba(255, 255, 255, 0.14);
+}
+.island-menu-ws-number.island-menu-ws-current {
+    color: -st-accent-fg-color;
+    background-color: -st-accent-color;
+}
+.island-menu-ws-number.island-menu-ws-urgent {
+    color: #ffffff;
+    box-shadow: inset 0 0 0 1px -st-accent-color;
+}
+.island-menu-ws-number.island-menu-ws-hot {
+    color: #ffffff;
+    background-color: rgba(255, 255, 255, 0.3);
+}
+
+/* A window or app dragged between two previews: the plus a new workspace is made at, dropped there. */
+.island-menu-peek-plus {
+    border-radius: 99px;
+    background-color: -st-accent-color;
+    box-shadow: 0 0 10px 1px rgba(0, 0, 0, 0.35);
+}
+.island-menu-peek-plus-icon {
+    icon-size: 16px;
+    color: #ffffff;
+}
+
+/* The thin line between GNOME's Activities button (its workspace dots) and the numbers. */
+.island-menu-ws-separator {
+    width: 1px;
+    height: 14px;
+    border-radius: 1px;
+    margin: 0 8px 0 4px;
+    background-color: rgba(255, 255, 255, 0.22);
+}
+
+/* The numbers light or dark as Island Menu's Settings → Style says, whatever the capsule they sit in: two ids and
+   the button's classes, and important, to win over Panel Island's light capsules' text (its own important rule). */
+#panel #panelLeft .panel-button.island-menu-ws-button.island-menu-ws-light .island-menu-ws-number,
+#panel #panelLeft .panel-button.island-menu-ws-button.island-menu-ws-light .island-menu-ws-number StLabel {
+    color: rgba(0, 0, 0, 0.4) !important;
+}
+#panel #panelLeft .panel-button.island-menu-ws-button.island-menu-ws-light .island-menu-ws-number.island-menu-ws-occupied,
+#panel #panelLeft .panel-button.island-menu-ws-button.island-menu-ws-light .island-menu-ws-number.island-menu-ws-occupied StLabel {
+    color: rgba(0, 0, 0, 0.8) !important;
+}
+#panel #panelLeft .panel-button.island-menu-ws-button.island-menu-ws-light .island-menu-ws-number:hover {
+    background-color: rgba(0, 0, 0, 0.08);
+}
+#panel #panelLeft .panel-button.island-menu-ws-button.island-menu-ws-light .island-menu-ws-number.island-menu-ws-urgent,
+#panel #panelLeft .panel-button.island-menu-ws-button.island-menu-ws-light .island-menu-ws-number.island-menu-ws-urgent StLabel {
+    color: rgba(0, 0, 0, 0.9) !important;
+}
+#panel #panelLeft .panel-button.island-menu-ws-button.island-menu-ws-light .island-menu-ws-number.island-menu-ws-current,
+#panel #panelLeft .panel-button.island-menu-ws-button.island-menu-ws-light .island-menu-ws-number.island-menu-ws-current StLabel {
+    color: -st-accent-fg-color !important;
+    background-color: -st-accent-color;
+}
+#panel #panelLeft .panel-button.island-menu-ws-button.island-menu-ws-light .island-menu-ws-number.island-menu-ws-hot,
+#panel #panelLeft .panel-button.island-menu-ws-button.island-menu-ws-light .island-menu-ws-number.island-menu-ws-hot StLabel {
+    color: rgba(0, 0, 0, 0.9) !important;
+    background-color: rgba(0, 0, 0, 0.14);
+}
+#panel #panelLeft .panel-button.island-menu-ws-button.island-menu-ws-light .island-menu-ws-separator {
+    background-color: rgba(0, 0, 0, 0.2);
+}
+
+#panel #panelLeft .panel-button.island-menu-ws-button.island-menu-ws-dark .island-menu-ws-number,
+#panel #panelLeft .panel-button.island-menu-ws-button.island-menu-ws-dark .island-menu-ws-number StLabel {
+    color: rgba(255, 255, 255, 0.45) !important;
+}
+#panel #panelLeft .panel-button.island-menu-ws-button.island-menu-ws-dark .island-menu-ws-number.island-menu-ws-occupied,
+#panel #panelLeft .panel-button.island-menu-ws-button.island-menu-ws-dark .island-menu-ws-number.island-menu-ws-occupied StLabel {
+    color: rgba(255, 255, 255, 0.9) !important;
+}
+#panel #panelLeft .panel-button.island-menu-ws-button.island-menu-ws-dark .island-menu-ws-number:hover {
+    background-color: rgba(255, 255, 255, 0.14);
+}
+#panel #panelLeft .panel-button.island-menu-ws-button.island-menu-ws-dark .island-menu-ws-number.island-menu-ws-urgent,
+#panel #panelLeft .panel-button.island-menu-ws-button.island-menu-ws-dark .island-menu-ws-number.island-menu-ws-urgent StLabel {
+    color: #ffffff !important;
+}
+#panel #panelLeft .panel-button.island-menu-ws-button.island-menu-ws-dark .island-menu-ws-number.island-menu-ws-current,
+#panel #panelLeft .panel-button.island-menu-ws-button.island-menu-ws-dark .island-menu-ws-number.island-menu-ws-current StLabel {
+    color: -st-accent-fg-color !important;
+    background-color: -st-accent-color;
+}
+#panel #panelLeft .panel-button.island-menu-ws-button.island-menu-ws-dark .island-menu-ws-number.island-menu-ws-hot,
+#panel #panelLeft .panel-button.island-menu-ws-button.island-menu-ws-dark .island-menu-ws-number.island-menu-ws-hot StLabel {
+    color: #ffffff !important;
+    background-color: rgba(255, 255, 255, 0.3);
+}
+#panel #panelLeft .panel-button.island-menu-ws-button.island-menu-ws-dark .island-menu-ws-separator {
+    background-color: rgba(255, 255, 255, 0.22);
+}
+
+/* The peek on light glass (Island Menu's Style light): its frames and the hot one dark, not white. */
+.island-menu-peek-frame.island-menu-peek-light {
+    border: 1px solid rgba(0, 0, 0, 0.16);
+}
+.island-menu-peek-frame.island-menu-peek-light.island-menu-peek-current,
+.island-menu-peek-frame.island-menu-peek-light.island-menu-peek-current.island-menu-peek-urgent {
+    border: 2px solid -st-accent-color;
+}
+.island-menu-peek-frame.island-menu-peek-light.island-menu-peek-urgent {
+    border: 2px solid rgba(0, 0, 0, 0.7);
+}
+.island-menu-peek-frame.island-menu-peek-light.island-menu-peek-hot {
+    border: 2px solid rgba(0, 0, 0, 0.75);
+    background-color: rgba(0, 0, 0, 0.1);
+}
+
+/* The Shelf's tile in the peek, after the workspaces' previews: its icon and name, white on dark glass, dark on
+   light. */
+.island-menu-peek-shelf {
+    border-radius: 8px;
+    background-color: rgba(255, 255, 255, 0.06);
+}
+.island-menu-peek-shelf.island-menu-peek-light {
+    background-color: rgba(0, 0, 0, 0.04);
+}
+.island-menu-peek-shelf-box {
+    spacing: 6px;
+}
+.island-menu-peek-shelf-icon {
+    icon-size: 24px;
+    color: rgba(255, 255, 255, 0.9);
+}
+.island-menu-peek-shelf-label {
+    font-size: 12px;
+    font-weight: bold;
+    color: rgba(255, 255, 255, 0.85);
+}
+.island-menu-peek-light .island-menu-peek-shelf-icon {
+    color: rgba(0, 0, 0, 0.75);
+}
+.island-menu-peek-light .island-menu-peek-shelf-label {
+    color: rgba(0, 0, 0, 0.7);
+}
+
+/* The star on a favourite app's row in the menu: filled, in the accent colour. */
+.island-menu-favorite-on StIcon {
+    color: -st-accent-color;
+}
+
+/* An open app's light by its name in the menu, and the bar's light beside the menu's icon while any app is open:
+   a small dot in the accent colour, blinking (menu.js). */
+.island-menu-running-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 3px;
+    background-color: rgba(128, 128, 128, 0.35);
+}
+/* Lit (and blinking) while the app is open. */
+.island-menu-running-dot.island-menu-running-on {
+    background-color: -st-accent-color;
+    box-shadow: 0 0 4px 1px -st-accent-color;
+}
+.island-menu-panel-outer {
+    spacing: 5px;
+}
+.island-menu-panel-light {
+    width: 6px;
+    height: 6px;
+    border-radius: 3px;
+    background-color: rgba(128, 128, 128, 0.45);
+}
+/* Lit (and blinking) while any app is open. */
+.island-menu-panel-light.island-menu-panel-light-on {
+    background-color: -st-accent-color;
+    box-shadow: 0 0 4px 1px -st-accent-color;
+}
