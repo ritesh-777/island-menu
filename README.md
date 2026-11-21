@@ -36,8 +36,7 @@ capsule.
 - **Alt+Tab and Super+Tab** (optional): hold Alt or Super, press Tab to step through your windows, let go to switch.
 - **Close and Kill**: close an app or a window from the menu, or force-quit one that hangs.
 - **A light for what is open**: beside each open app, and beside the menu's button, so nothing is shut down by
-  accident. It stays still while the app has a window in front of you, and blinks when its windows are only minimized
-  or on another workspace; the menu's button blinks only when apps run with nothing of theirs in front.
+  accident.
 - **Favourites**: a star on every app, shared with your dock.
 - **The Shelf**: files, folders, links, apps and text you keep at hand, with drag and drop.
 - **Drag out of the menu**: an app, a file or a window onto a workspace, the Shelf, or the desktop.
@@ -126,15 +125,14 @@ Open the Extensions app, find **Island Menu**, and click the settings button. Se
   off, GNOME's own switchers have them again.
 - **Super key opens the menu** — Instead of the overview, which stays on the Activities button and Super+A.
 - **Keyboard shortcut** — Super+Space by default.
-- **Top bar button**, **Top bar icon** (your system's logo, or the app grid) and **Top bar button placement**.
+- **Top bar button**, **Top bar icon** (your system's logo, or the app grid) and **Top bar button placement**
+  (before or after the workspaces, or in the middle before the clock: Panel Island's middle capsule, where it is shown).
 
 ### Workspaces
 
 In Panel Island's left capsule.
 
 - **Workspace numbers** — One button per workspace. Click one to go there; drop a window, an app or a file on one.
-  The current one sits in its pill; the others in a soft circle, deeper for a workspace with windows on it and fainter
-  for an empty one, following the glass's strength.
 - **Drag to workspaces** — Hold a window by its title bar, or an app icon or a file, over the capsule: the peek
   opens. Let go on a workspace to send it there, or in a gap between two to make a new workspace there.
 - **Workspace peek** and **Peek delay** — Rest the pointer on the workspace buttons or the menu's button: a live

@@ -313,7 +313,12 @@ export class Peek {
         const contentWidth = 2 * padX + slots * width + (slots - 1) * spacing;
         const contentHeight = 2 * pad + height;
         const x = Math.round(Math.max(monitor.x + margin, Math.min(rest.x, monitor.x + monitor.width - margin - contentWidth)));
-        const y = Math.round(rest.y + rest.height + 4 * s);
+        // Under the capsule; above it while Panel Island has the bar at the bottom, its glass growing up round it.
+        let above = false;
+        try {
+            above = Boolean(global.panel_island?.atBottom?.());
+        } catch (e) {}
+        const y = Math.round(above ? rest.y - 4 * s - contentHeight : rest.y + rest.height + 4 * s);
 
         this._content = new Clutter.Actor({x, y, width: contentWidth, height: contentHeight, opacity: 0, reactive: true});
         const urgent = this._host.urgent();

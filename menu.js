@@ -57,6 +57,8 @@ const PANEL_ICON_REPOSITION_DELAYS_MS = [0, 250, 1500, 4500];
 const PANEL_ICON_SESSION_REPOSITION_DELAYS_MS = [120, 800, 2200, 5000];
 const PANEL_ICON_PLACEMENT_BEFORE_WORKSPACES = 'before-workspaces';
 const PANEL_ICON_PLACEMENT_AFTER_WORKSPACES = 'after-workspaces';
+/** In the middle of the bar, before the clock (Panel Island's middle capsule). */
+const PANEL_ICON_PLACEMENT_CENTRE = 'centre';
 const CLI_DESKTOP_PREFIXES = ['gnome.essentials.cli.', 'gnome-essentials-cli-'];
 const CONTEXT_NOTES_DIR_NAME = 'context-notes';
 const CONTEXT_DOUBLE_CLICK_MS = 420;
@@ -747,8 +749,10 @@ export default class EssentialMenu {
             this._launcher.opacity = 0;
             this._launcher.scale_x = 0.94;
             this._launcher.scale_y = 0.94;
-            this._launcher.set_position(x, targetY - 16);
-            this._launcher.set_pivot_point(0.5, 0.0);
+            // Down out of the capsule; up out of it with the bar at the bottom.
+            const above = this._launcherAnchor !== null && this._launcherAnchor !== undefined;
+            this._launcher.set_position(x, above ? targetY + 16 : targetY - 16);
+            this._launcher.set_pivot_point(0.5, above ? 1.0 : 0.0);
 
             this._launcher.ease({
                 opacity: 255,
@@ -760,6 +764,7 @@ export default class EssentialMenu {
                 onComplete: () => {
                     this._isAnimatingOpen = false;
                     this._resetResultsScroll();
+                    this._keepAboveCapsule();
                 }
             });
 
@@ -865,9 +870,10 @@ export default class EssentialMenu {
         }
 
         const [x, currentY] = this._launcher.get_position();
+        const above = this._launcherAnchor !== null && this._launcherAnchor !== undefined;
         this._launcher.ease({
             opacity: 0,
-            y: currentY - 12,
+            y: above ? currentY + 12 : currentY - 12,
             scale_x: 0.95,
             scale_y: 0.95,
             duration: 150,
@@ -1613,14 +1619,21 @@ export default class EssentialMenu {
         });
         this._panelClickConnections.push([this._indicator, clickedId]);
 
-        const leftBox = Main.panel?._leftBox;
+        const centre = this._getPanelIconPlacement() === PANEL_ICON_PLACEMENT_CENTRE;
+        const leftBox = centre ? Main.panel?._centerBox : Main.panel?._leftBox;
         if (leftBox && typeof leftBox.insert_child_at_index === 'function') {
             leftBox.insert_child_at_index(this._indicator, this._getPanelIconInitialPosition());
             Main.panel.statusArea['gnome-essential-menu'] = this._indicator;
         } else {
-            Main.panel.addToStatusArea('gnome-essential-menu', this._indicator, this._getPanelIconInitialPosition(), 'left');
+            Main.panel.addToStatusArea('gnome-essential-menu', this._indicator, this._getPanelIconInitialPosition(),
+                centre ? 'center' : 'left');
         }
         this._schedulePanelIconReposition(PANEL_ICON_REPOSITION_DELAYS_MS);
+        // Moved by another extension (Top Bar Organizer reorders the bar by its own saved order each time any item is
+        // added, at every login too): put back where Settings say, before the frame. Our own moves are not followed,
+        // and such an extension does not follow moves, so the two never chase each other.
+        const movedId = this._indicator.connect('parent-set', () => this._onPanelIconMoved());
+        this._panelClickConnections.push([this._indicator, movedId]);
         if (typeof global.sync_pointer === 'function') {
             global.sync_pointer();
         }
@@ -1754,6 +1767,10 @@ export default class EssentialMenu {
     }
 
     _cancelPanelIconReposition() {
+        if (this._panelIconLater) {
+            global.compositor.get_laters().remove(this._panelIconLater);
+            this._panelIconLater = 0;
+        }
         for (const id of this._panelIconRepositionTimeoutIds || []) {
             try {
                 GLib.source_remove(id);
@@ -1764,8 +1781,49 @@ export default class EssentialMenu {
         this._panelIconRepositionTimeoutIds = [];
     }
 
+    _onPanelIconMoved() {
+        if (this._movingPanelIcon || !this._indicator?.get_parent?.() || this._panelIconLater) return;
+        this._panelIconLater = global.compositor.get_laters().add(Meta.LaterType.BEFORE_REDRAW, () => {
+            this._panelIconLater = 0;
+            if (this._enabled && this._indicator) this._repositionPanelIcon();
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
     _repositionPanelIcon() {
+        this._movingPanelIcon = true;
+        try {
+            this._placePanelIcon();
+        } finally {
+            this._movingPanelIcon = false;
+        }
+    }
+
+    _placePanelIcon() {
         const actor = this._indicator?.container || this._indicator;
+        const centre = this._getPanelIconPlacement() === PANEL_ICON_PLACEMENT_CENTRE;
+        const wantedBox = centre ? Main.panel?._centerBox : Main.panel?._leftBox;
+        // Taken to another box (another extension's ordering): into the one Settings say first.
+        if (actor && wantedBox && actor.get_parent?.() && actor.get_parent() !== wantedBox) {
+            try {
+                actor.get_parent().remove_child(actor);
+                wantedBox.insert_child_at_index(actor, 0);
+            } catch (e) {
+                logError(`Failed to move panel icon back to its box: ${e.message}`);
+                return;
+            }
+        }
+        // In the middle: kept first there, before the clock.
+        if (centre) {
+            const centreBox = Main.panel?._centerBox;
+            if (!actor || !centreBox || actor.get_parent?.() !== centreBox) return;
+            const first = centreBox.get_first_child();
+            if (first && first !== actor) {
+                centreBox.set_child_below_sibling(actor, first);
+                if (typeof global.sync_pointer === 'function') global.sync_pointer();
+            }
+            return;
+        }
         const leftBox = Main.panel?._leftBox;
         if (!actor || !leftBox || typeof leftBox.get_children !== 'function') return;
 
@@ -1815,16 +1873,17 @@ export default class EssentialMenu {
     _getPanelIconPlacement() {
         try {
             const placement = this._settings?.get_string('menu-panel-icon-placement') || '';
-            return placement === PANEL_ICON_PLACEMENT_AFTER_WORKSPACES
-                ? PANEL_ICON_PLACEMENT_AFTER_WORKSPACES
-                : PANEL_ICON_PLACEMENT_BEFORE_WORKSPACES;
+            if (placement === PANEL_ICON_PLACEMENT_AFTER_WORKSPACES || placement === PANEL_ICON_PLACEMENT_CENTRE)
+                return placement;
+            return PANEL_ICON_PLACEMENT_BEFORE_WORKSPACES;
         } catch (e) {
             return PANEL_ICON_PLACEMENT_BEFORE_WORKSPACES;
         }
     }
 
     _getPanelIconInitialPosition() {
-        return this._getPanelIconPlacement() === PANEL_ICON_PLACEMENT_AFTER_WORKSPACES ? 1 : 0;
+        const placement = this._getPanelIconPlacement();
+        return placement === PANEL_ICON_PLACEMENT_AFTER_WORKSPACES ? 1 : 0;
     }
 
     _findWorkspacePanelActor(leftBox, skipActor = null) {
@@ -2200,12 +2259,32 @@ export default class EssentialMenu {
         );
         let x = Math.floor(monitor.x + (monitor.width - width) / 2);
         let y = Math.floor(monitor.y + Math.max(72, monitor.height * LAUNCHER_TOP_RATIO));
-        // With Panel Island: right under its left capsule, the glass growing out of it round the launcher.
-        const pill = this._panelIsland()?.leftRect();
+        // With Panel Island: right under its left capsule, the glass growing out of it round the launcher. With
+        // its bar at the bottom, right above it instead, its bottom kept there as its results change its height.
+        // Panel Island may grow it out of its middle capsule instead (its Settings): centred under that one.
+        const island = this._panelIsland();
+        let pill = null;
+        try {
+            pill = island?.panelRect?.() ?? island?.leftRect();
+        } catch (e) {
+            pill = island?.leftRect();
+        }
+        this._launcherAnchor = null;
         if (pill) {
             const margin = 8;
-            x = Math.floor(Math.max(monitor.x + margin, Math.min(pill.x, monitor.x + monitor.width - width - margin)));
+            const from = pill.centre ? Math.round(pill.x + (pill.width - width) / 2) : pill.x;
+            x = Math.floor(Math.max(monitor.x + margin, Math.min(from, monitor.x + monitor.width - width - margin)));
             y = Math.floor(pill.y + pill.height + 6);
+            let above = false;
+            try {
+                above = Boolean(island.atBottom?.());
+            } catch (e) {}
+            if (above) {
+                this._launcherAnchor = Math.floor(pill.y - 6);
+                y = this._launcherAnchor - Math.ceil(this._launcher.get_preferred_height(width)[1]);
+                if (!this._launcher._aboveCapsuleId)
+                    this._launcher._aboveCapsuleId = this._launcher.connect('notify::height', () => this._keepAboveCapsule());
+            }
         }
 
         this._launcher.set_width(width);
@@ -2217,6 +2296,20 @@ export default class EssentialMenu {
         }
 
         this._updateResultsHeight();
+    }
+
+    /** With Panel Island's bar at the bottom: the launcher's bottom kept just above the capsule as it grows or shrinks
+     * (not while it slides in, which ends there). From the height it asks for, so it is moved in the same frame as its
+     * results change (`_updateResultsHeight`), not a frame after. */
+    _keepAboveCapsule() {
+        const launcher = this._launcher;
+        if (!launcher || this._launcherAnchor === null || this._launcherAnchor === undefined || !this._isOpen ||
+            this._isAnimatingOpen)
+            return;
+        const width = launcher.width > 0 ? launcher.width : -1;
+        const y = this._launcherAnchor - Math.ceil(launcher.get_preferred_height(width)[1]);
+        if (launcher.y !== y)
+            launcher.y = y;
     }
 
     _updateResultsHeight() {
@@ -2250,6 +2343,7 @@ export default class EssentialMenu {
             const targetHeight = Math.min(maxResultsHeight, naturalHeight);
             if (this._resultsScrollView.get_height() !== targetHeight) {
                 this._resultsScrollView.set_height(targetHeight);
+                this._keepAboveCapsule();
             }
         } catch (e) {
             logError(`Failed to update results height: ${e.message}`);

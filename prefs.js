@@ -113,6 +113,7 @@ export default class IslandMenuPreferences extends ExtensionPreferences {
         opening.add(choiceRow(settings, 'menu-panel-icon-placement', 'Top bar button placement', [
             ['before-workspaces', 'Before the workspaces'],
             ['after-workspaces', 'After the workspaces'],
+            ['centre', 'In the middle', 'Before the clock, in Panel Island\'s middle capsule where it is shown'],
         ]));
         page.add(opening);
 

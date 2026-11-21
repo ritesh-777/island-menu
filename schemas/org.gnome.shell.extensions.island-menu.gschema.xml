@@ -34,10 +34,11 @@
       <choices>
         <choice value="before-workspaces"/>
         <choice value="after-workspaces"/>
+        <choice value="centre"/>
       </choices>
       <default>'before-workspaces'</default>
       <summary>Top bar button placement</summary>
-      <description>Before or after the workspace buttons.</description>
+      <description>Before or after the workspace buttons, or (centre) in the middle of the bar before the clock: in Panel Island's middle capsule, where that is shown. Hovering it there opens no workspace peek.</description>
     </key>
     <key name="menu-default-search-engine" type="s">
       <choices>
