@@ -22,6 +22,9 @@ import * as DND from 'resource:///org/gnome/shell/ui/dnd.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {WorkspaceThumbnail} from 'resource:///org/gnome/shell/ui/workspaceThumbnail.js';
 
+/** How many more times (`BUSY_RETRY_MS` apart) a peek waited for is tried while something else has the capsule. */
+const BUSY_RETRIES = 8;
+const BUSY_RETRY_MS = 100;
 /** A preview's width, its padding round them all and the room between them, in CSS px. */
 const THUMB_WIDTH = 168;
 const PAD = 12;
@@ -153,14 +156,23 @@ export class Peek {
             this._cancelOpen();
             return;
         }
-        if (this._open || this._openTimer || this._host.busy() || Main.overview.visible)
+        if (this._open || this._openTimer || Main.overview.visible)
             return;
-        this._openTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, this._host.delay(), () => {
+        // Still busy as the pointer has rested (a menu's glass shrinking back into the capsule, or the menu closing):
+        // looked at again every little while for a moment, so it opens once that is done instead of waiting for the
+        // pointer to come back.
+        let tries = BUSY_RETRIES;
+        const wait = ms => GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => {
+            if (button.hover && !Main.overview.visible && this._host.busy() && tries-- > 0) {
+                this._openTimer = wait(BUSY_RETRY_MS);
+                return GLib.SOURCE_REMOVE;
+            }
             this._openTimer = 0;
             if (button.hover && !this._host.busy() && !Main.overview.visible)
                 this.open();
             return GLib.SOURCE_REMOVE;
         });
+        this._openTimer = wait(this._host.delay());
     }
 
     _cancelOpen() {
@@ -803,8 +815,13 @@ export class Peek {
     /** `_why`: what closed it (said where it is called, for whoever reads the code). */
     close(now = false, _why = '') {
         this._cancelOpen();
-        if (!this._open)
+        // Already shrinking back, and to be gone now (a menu or a panel takes the capsule, its glass put away by Panel
+        // Island): its previews, still fading, gone with it.
+        if (!this._open) {
+            if (now)
+                this._closingContent?.remove_all_transitions();
             return;
+        }
         this._open = false;
         this._dragging = false;
         this._stopLeaveWatch();
@@ -817,7 +834,12 @@ export class Peek {
         if (this._rebuildTimer)
             GLib.source_remove(this._rebuildTimer);
         this._rebuildTimer = 0;
-        const destroy = () => this._dropContent(content, items);
+        // Its pending refresh (of these previews) dropped now; once they have faded, they go without touching the
+        // refresh of a peek opened again meanwhile.
+        if (this._refresh)
+            GLib.source_remove(this._refresh);
+        this._refresh = 0;
+        const destroy = () => this._dropContent(content, items, false);
         const glass = this._host.glass;
         const rest = this._host.restRect();
         const done = () => {
@@ -833,8 +855,13 @@ export class Peek {
         }
         content.reactive = false;
         const {ms, ease} = this._host.closing();
+        this._closingContent = content;
         content.ease({opacity: 0, duration: Math.round(ms * 0.4), mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-            onStopped: destroy});
+            onStopped: () => {
+                if (this._closingContent === content)
+                    this._closingContent = null;
+                destroy();
+            }});
         glass.animate(glass.rect, rest, {ms, ease, target: () => this._host.restRect(), onDone: done});
     }
 
