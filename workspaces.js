@@ -110,6 +110,8 @@ export class Workspaces {
         global.island_menu_workspaces = {
             panelIslandReady: () => this._connect(),
             panelIslandGone: () => this._disconnect(),
+            // Panel Island's look changed (its glass's strength): the numbers' shade with it.
+            lookChanged: () => this._numbers.setStrength(this._glassStrength()),
             // The menu button opens the peek, rather than taking drops onto the Shelf (menu.js).
             // An app or a window let go on the menu button itself: on the Shelf (menu.js).
             panelDragOver: source => this._shelfHost()?.dragOver(source) ?? DND.DragMotionResult.CONTINUE,
@@ -139,6 +141,15 @@ export class Workspaces {
         if (style !== 'auto')
             return style === 'light';
         return St.Settings.get().color_scheme !== St.SystemColorScheme.PREFER_DARK;
+    }
+
+    /** Panel Island's glass strength (0 clear to 100 strong); a middle one without it. */
+    _glassStrength() {
+        try {
+            return this._panelIsland()?.strength?.() ?? 50;
+        } catch {
+            return 50;
+        }
     }
 
     /** Panel Island's workspace glass, if it runs. */
@@ -503,6 +514,7 @@ export class Workspaces {
         const s = this._settings;
         this._numbers.enabled = s.get_boolean('workspace-numbers');
         this._numbers.setLight(this._light());
+        this._numbers.setStrength(this._glassStrength());
         this._attention.enabled = s.get_boolean('attention-glow');
         if (this._peek)
             this._peek.enabled = s.get_boolean('workspace-peek');

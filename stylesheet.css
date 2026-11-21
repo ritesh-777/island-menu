@@ -223,12 +223,14 @@
    windows brighter, the one shown filled in the accent colour, one wanting attention ringed in it, one a window is
    dragged onto lit. */
 .island-menu-ws {
-    spacing: 3px;
+    spacing: 6px;
 }
 #panel .panel-button.island-menu-ws-button {
     -natural-hpadding: 6px;
     -minimum-hpadding: 4px;
 }
+/* Every number this pill's size (one footprint, so a switch moves nothing); the shown one filled in the accent, every
+   other one showing only its circle inside (numbers.js `_shade`). */
 .island-menu-ws-number {
     min-width: 20px;
     min-height: 20px;
@@ -238,13 +240,21 @@
     font-weight: bold;
     text-align: center;
     color: rgba(255, 255, 255, 0.45);
-    transition-duration: 150ms;
 }
 .island-menu-ws-number.island-menu-ws-occupied {
     color: rgba(255, 255, 255, 0.9);
 }
 .island-menu-ws-number:hover {
     background-color: rgba(255, 255, 255, 0.14);
+}
+/* Each number's layers (numbers.js): its circle, the neutral shade of a workspace not shown, and the accent pill of the
+   shown one, a little wider than its slot; the two crossfade as one on a switch. */
+.island-menu-ws-dot {
+    border-radius: 10px;
+}
+.island-menu-ws-pill {
+    background-color: -st-accent-color;
+    border-radius: 10px;
 }
 .island-menu-ws-number.island-menu-ws-current {
     color: -st-accent-fg-color;

@@ -17,7 +17,7 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as ModalDialog from 'resource:///org/gnome/shell/ui/modalDialog.js';
 import * as SystemActions from 'resource:///org/gnome/shell/misc/systemActions.js';
 import { classifyAppInstallSource } from './appInstallSource.js';
-import { fuzzyNameScore, fuzzyScore, loosen } from './fuzzy.js';
+import { launcherMatcher, fuzzyScore, loosen } from './fuzzy.js';
 import { GlassPanel } from './glassPanel.js';
 import { makeDistroIcon } from './distroIcon.js';
 
@@ -206,18 +206,18 @@ class CalculatorParser {
     }
 
     _parseMultiplicative() {
-        let value = this._parsePower();
+        let value = this._parseUnary();
 
         while (true) {
             this._skipWhitespace();
             if (this._match('*')) {
-                value *= this._parsePower();
+                value *= this._parseUnary();
             } else if (this._match('/')) {
-                const divisor = this._parsePower();
+                const divisor = this._parseUnary();
                 if (divisor === 0) throw new Error('Division by zero');
                 value /= divisor;
             } else if (this._match('%')) {
-                const divisor = this._parsePower();
+                const divisor = this._parseUnary();
                 if (divisor === 0) throw new Error('Modulo by zero');
                 value %= divisor;
             } else {
@@ -226,11 +226,12 @@ class CalculatorParser {
         }
     }
 
+    // A sign binds looser than ^, as in maths: -2^2 is -(2^2) = -4; 2^-1 still works (the exponent may be signed).
     _parsePower() {
-        let value = this._parseUnary();
+        let value = this._parsePrimary();
         this._skipWhitespace();
         if (this._match('^')) {
-            value = Math.pow(value, this._parsePower());
+            value = Math.pow(value, this._parseUnary());
         }
         return value;
     }
@@ -239,7 +240,7 @@ class CalculatorParser {
         this._skipWhitespace();
         if (this._match('+')) return this._parseUnary();
         if (this._match('-')) return -this._parseUnary();
-        return this._parsePrimary();
+        return this._parsePower();
     }
 
     _parsePrimary() {
@@ -625,7 +626,6 @@ export default class EssentialMenu {
 
     open() {
         if (this._isOpen) return;
-        this._startRowBlink();
         // Each opening counted (emptyWorkspaces.js tells its own from one by hand).
         this._openCount = (this._openCount || 0) + 1;
 
@@ -648,6 +648,7 @@ export default class EssentialMenu {
         }
 
         this._isOpen = true;
+        this._startRowBlink();
 
         if (this._themeSyncTimerId > 0) {
             try {
@@ -1594,6 +1595,8 @@ export default class EssentialMenu {
         this._panelLight = new St.Widget({
             style_class: 'island-menu-panel-light', y_align: Clutter.ActorAlign.CENTER
         });
+        // Off screen (a fullscreen window, the lock screen), the clock stops; back on, it runs again.
+        this._panelLight.connect('notify::mapped', () => this._syncBlinkClock());
         outer.add_child(this._panelLight);
         this._indicator.set_child(outer);
         this._startPanelLight();
@@ -1631,8 +1634,12 @@ export default class EssentialMenu {
         this._stopPanelLight();
         const sync = () => this._queuePanelLightSync();
         this._appSystem.connectObject('app-state-changed', sync, this._panelLight);
-        global.display.connectObject('window-created', sync, this._panelLight);
-        global.window_manager.connectObject('destroy', sync, this._panelLight);
+        // What is in front of you: a window opened, closed, minimized or brought back, moved to another workspace
+        // (a restack), or another workspace shown.
+        global.display.connectObject('window-created', sync, 'restacked', sync, this._panelLight);
+        global.window_manager.connectObject('destroy', sync, 'minimize', sync, 'unminimize', sync, 'map', sync,
+            this._panelLight);
+        global.workspace_manager.connectObject('active-workspace-changed', sync, this._panelLight);
         this._syncPanelLight();
     }
 
@@ -1640,11 +1647,13 @@ export default class EssentialMenu {
         if (this._panelLightSyncId) GLib.source_remove(this._panelLightSyncId);
         this._panelLightSyncId = 0;
         this._panelLit = false;
+        this._panelAway = false;
         this._syncBlinkClock?.();
         if (this._panelLight) {
             this._appSystem?.disconnectObject(this._panelLight);
             global.display.disconnectObject(this._panelLight);
             global.window_manager.disconnectObject(this._panelLight);
+            global.workspace_manager.disconnectObject(this._panelLight);
         }
     }
 
@@ -1663,8 +1672,11 @@ export default class EssentialMenu {
         const light = this._panelLight;
         if (!light) return;
         const open = (this._appSystem?.get_running?.() ?? []).filter(app => (app.get_n_windows?.() ?? 0) > 0);
-        // Always there: off with nothing open, lit and blinking while any app is.
+        // Always there: off with nothing open; lit while any app is, still while one is in front of you, blinking
+        // while all of them are out of sight (minimized, or on other workspaces): something left running unseen.
         const lit = open.length > 0;
+        const inFront = open.some(app => (app.get_windows?.() ?? []).some(window => this._windowInFront(window)));
+        this._panelAway = lit && !inFront;
         light.visible = true;
         if (lit) light.add_style_class_name('island-menu-panel-light-on');
         else light.remove_style_class_name('island-menu-panel-light-on');
@@ -1672,6 +1684,8 @@ export default class EssentialMenu {
             this._indicator.accessible_name = open.length
                 ? `Island Menu: ${open.length} app${open.length === 1 ? '' : 's'} open` : 'Island Menu';
         this._panelLit = lit;
+        // The open menu's rows too, as what is in front of you changed.
+        if (this._isOpen) (this._resultButtons || []).forEach(button => this._syncRowLight(button));
         this._syncBlinkClock();
     }
 
@@ -1708,6 +1722,7 @@ export default class EssentialMenu {
             // Indicator may already be gone during Shell teardown.
         }
         this._indicator = null;
+        this._panelLight = null;
         this._indicatorMenuOpenId = 0;
     }
 
@@ -1934,6 +1949,7 @@ export default class EssentialMenu {
         if (!this._isDark)
             this._launcher.add_style_class_name('essential-menu-light');
 
+        this._launcher.connect('notify::mapped', () => this._syncBlinkClock());
         this._buildLauncherChrome();
         Main.layoutManager.uiGroup.add_child(this._launcher);
         try {
@@ -2204,6 +2220,8 @@ export default class EssentialMenu {
     }
 
     _updateResultsHeight() {
+        // The rows changed: the clock runs only while one of them has a lit light.
+        if (this._rowBlinking) this._syncBlinkClock();
         if (!this._resultsScrollView || !this._resultsBox) return;
 
         if (this._topSpacer) {
@@ -2625,8 +2643,40 @@ export default class EssentialMenu {
         this._syncBlinkClock();
     }
 
+    /** Whether `window` is in front of you: not minimized, on the workspace shown (or on every workspace). */
+    _windowInFront(window) {
+        if (!window || window.minimized) return false;
+        if (window.is_on_all_workspaces?.()) return true;
+        return window.get_workspace?.() === global.workspace_manager.get_active_workspace();
+    }
+
+    /** A row's light: off (not open), still (open and in front of you), or blinking (open, out of sight: minimized or
+     * on another workspace), the class `island-menu-running-away` marking the blinking ones. */
+    _syncRowLight(button, record = button?._currentRecord) {
+        const dot = button?._runningDot;
+        if (!dot) return;
+        let open = false, away = false;
+        if (record?.kind === 'window') {
+            open = !!record.window;
+            away = open && !this._windowInFront(record.window);
+        } else {
+            const windows = button._runningApp?.get_windows?.() ?? [];
+            open = windows.length > 0;
+            away = open && !windows.some(window => this._windowInFront(window));
+        }
+        if (open) dot.add_style_class_name('island-menu-running-on');
+        else dot.remove_style_class_name('island-menu-running-on');
+        if (away) dot.add_style_class_name('island-menu-running-away');
+        else dot.remove_style_class_name('island-menu-running-away');
+        dot.opacity = away && this._blinkLit === false ? 70 : 255;
+    }
+
     _syncBlinkClock() {
-        const want = !!this._panelLit || !!this._rowBlinking;
+        // Only while a light blinks on screen: the bar's (nothing in front of you), or a row's out of sight.
+        const panelBlinks = this._panelAway && this._panelLight?.mapped;
+        const rowsBlink = this._rowBlinking && this._launcher?.mapped && this._resultButtons?.some(
+            button => button._runningDot?.visible && button._runningDot.has_style_class_name('island-menu-running-away'));
+        const want = !!(panelBlinks || rowsBlink);
         if (want && !this._blinkClockId) {
             this._blinkLit = true;
             this._blinkClockId = GLib.timeout_add(GLib.PRIORITY_DEFAULT_IDLE, 1000, () => {
@@ -2647,12 +2697,12 @@ export default class EssentialMenu {
         const level = this._blinkLit === false ? 70 : 255;
         const light = this._panelLight;
         if (light && light.mapped !== false)
-            light.opacity = this._panelLit ? level : 255;
+            light.opacity = this._panelAway ? level : 255;
         if (!this._rowBlinking) return;
         for (const button of this._resultButtons || []) {
             const dot = button?._runningDot;
             if (dot?.visible)
-                dot.opacity = dot.has_style_class_name('island-menu-running-on') ? level : 255;
+                dot.opacity = dot.has_style_class_name('island-menu-running-away') ? level : 255;
         }
     }
 
@@ -3360,6 +3410,7 @@ export default class EssentialMenu {
      * holding it, then (fuzzy.js) those close to it though misspelt or shortened, closest first. */
     _searchAppRecords(query) {
         const scored = [];
+        let fuzzyMatch;
 
         for (const record of [...this._appRecords, ...this._settingsPanelRecords(), ...this._systemActionRecords()]) {
             const name = normalize(record.name);
@@ -3369,7 +3420,9 @@ export default class EssentialMenu {
             else if (name.startsWith(query)) score = 1;
             else if (record.haystack.includes(query)) score = 2;
             else if (query.length >= 3) {
-                const fuzzy = fuzzyNameScore(query, record.name, record.haystack);
+                // One matcher per search (fuzzy.js): word scores shared across records, each record's words kept.
+                fuzzyMatch ??= launcherMatcher(query, this._launcherRecordWords ??= new WeakMap());
+                const fuzzy = fuzzyMatch(record);
                 if (fuzzy !== null) score = 3 + fuzzy;
             }
 
@@ -4022,14 +4075,12 @@ export default class EssentialMenu {
         if (button._runningDot) {
             const app = record?.app ?? (record?.kind === 'shelf-item' && record.shelfItem?.type === 'app'
                 ? this._appSystem?.lookup_app?.(record.shelfItem.appId || record.shelfItem.value) : null);
-            // On every app's row, off; lit and blinking while the app is open (a window of it somewhere). A window's
-            // row: lit, it is open.
+            // On every app's row, off; lit while the app is open (a window of it somewhere): still while it is in front
+            // of you, blinking while it is out of sight (`_syncRowLight`). A window's row: lit, it is open.
             const isWindow = record?.kind === 'window';
-            const open = isWindow || (!!app && (app.get_n_windows?.() ?? 0) > 0);
             button._runningDot.visible = isWindow || !!app;
-            button._runningDot.opacity = open && this._blinkLit === false ? 70 : 255;
-            if (open) button._runningDot.add_style_class_name('island-menu-running-on');
-            else button._runningDot.remove_style_class_name('island-menu-running-on');
+            button._runningApp = app;
+            this._syncRowLight(button, record);
         }
         if (button._favoriteBtn) {
             const appId = this._favoriteAppId(record);

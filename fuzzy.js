@@ -81,15 +81,17 @@ function initials(term, textWords) {
  * the edits added up; lower is closer. Null if any typed word has no close word in it.
  */
 export function fuzzyScore(query, text) {
-    const terms = words(query);
-    const textWords = words(text);
+    return scoreWords(words(query), words(text), termToWord);
+}
+
+function scoreWords(terms, textWords, match) {
     if (!terms.length || !textWords.length)
         return null;
     let total = 0;
     for (const term of terms) {
         let best = null;
         for (const word of textWords) {
-            const score = termToWord(term, word);
+            const score = match(term, word);
             if (score !== null && (best === null || score < best))
                 best = score;
             if (best === 0)
@@ -123,4 +125,36 @@ export function fuzzyNameScore(query, name, more = '') {
     if (byName === null && byAll === null)
         return null;
     return Math.min(byName ?? Infinity, byAll === null ? Infinity : byAll + 1);
+}
+
+/** A launcher query compares the same words across names, keywords and desktop IDs. Keep each
+ * term/word score only for this query. Cache tokenized records for their app-index lifetime. */
+export function launcherMatcher(query, recordWords) {
+    const terms = words(query);
+    const scores = new Map(terms.map(term => [term, new Map()]));
+    function match(term, word) {
+        const cache = scores.get(term);
+        const cached = cache.get(word);
+        if (cached !== undefined)
+            return cached;
+        const score = termToWord(term, word);
+        cache.set(word, score);
+        return score;
+    }
+
+    return record => {
+        let tokens = recordWords.get(record);
+        if (!tokens) {
+            tokens = {name: words(record.name), all: words(`${record.name} ${record.haystack}`)};
+            recordWords.set(record, tokens);
+        }
+        const byName = scoreWords(terms, tokens.name, match);
+        // The second score has a penalty of one, so it cannot improve either of these scores.
+        if (byName === 0 || byName === 1)
+            return byName;
+        const byAll = scoreWords(terms, tokens.all, match);
+        if (byAll === null)
+            return byName;
+        return Math.min(byName ?? Infinity, byAll + 1);
+    };
 }
