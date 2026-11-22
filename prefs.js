@@ -110,6 +110,13 @@ export default class IslandMenuPreferences extends ExtensionPreferences {
             ['system', 'System logo', 'This system\'s own logo, black or white as the bar is'],
             ['grid', 'App grid'],
         ]));
+        opening.add(choiceRow(settings, 'menu-launcher-place', 'Launcher opens at', [
+            ['capsule', 'Panel Island\'s capsule', 'Its glass growing out of the capsule (near the top without Panel Island)'],
+            ['top-middle', 'Top middle', 'Under the top bar, centred, coming down'],
+            ['centre', 'Centre of the screen', 'In the middle, opening out from there'],
+            ['bottom-left', 'Bottom left', 'At the bottom left, rising up'],
+            ['bottom-middle', 'Bottom middle', 'At the bottom, centred, rising up'],
+        ]));
         opening.add(choiceRow(settings, 'menu-panel-icon-placement', 'Top bar button placement', [
             ['before-workspaces', 'Before the workspaces'],
             ['after-workspaces', 'After the workspaces'],

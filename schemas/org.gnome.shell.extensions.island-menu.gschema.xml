@@ -30,6 +30,18 @@
       <summary>Top bar icon</summary>
       <description>system: the logo of the system it runs on (Ubuntu's, Fedora's…), found on the system and drawn black or white as the bar's text is. grid: the app grid.</description>
     </key>
+    <key name="menu-launcher-place" type="s">
+      <choices>
+        <choice value="capsule"/>
+        <choice value="top-middle"/>
+        <choice value="centre"/>
+        <choice value="bottom-left"/>
+        <choice value="bottom-middle"/>
+      </choices>
+      <default>'capsule'</default>
+      <summary>Launcher opens at</summary>
+      <description>capsule: out of Panel Island's capsule, its glass growing out of it (near the top without Panel Island). top-middle: under the top bar, centred, coming down. centre: the middle of the screen, opening out from there. bottom-left, bottom-middle: at the bottom, rising up. These four have the launcher's own glass, and keep it clear of the bar.</description>
+    </key>
     <key name="menu-panel-icon-placement" type="s">
       <choices>
         <choice value="before-workspaces"/>

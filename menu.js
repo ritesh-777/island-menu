@@ -589,6 +589,16 @@ export default class EssentialMenu {
         else this.open();
     }
 
+    /** Settings → Launcher opens at: 'capsule' (out of Panel Island's capsule, or near the top without it), or a place
+     * of its own: 'top-middle', 'centre', 'bottom-left', 'bottom-middle'. */
+    _launcherPlace() {
+        try {
+            return this._settings?.get_string('menu-launcher-place') || 'capsule';
+        } catch (e) {
+            return 'capsule';
+        }
+    }
+
     /** Panel Island's glass service (`global.panel_island`), if it is on with a left capsule to grow out of. */
     _panelIsland() {
         const island = global.panel_island;
@@ -676,7 +686,8 @@ export default class EssentialMenu {
             this._blurBottomTape.remove_all_transitions();
         }
         // On Panel Island's glass: its own background and blur left out, the glass drawn by Panel Island instead.
-        const island = this._panelIsland();
+        // Only where it grows out of a capsule (Settings → Launcher opens at): elsewhere, its own glass.
+        const island = this._launcherPlace() === 'capsule' ? this._panelIsland() : null;
         this._launcher.set_style(island ? this._islandStyle() : this._ownStyle());
         if (this._glassPanel)
             this._glassPanel.enabled = !island;
@@ -749,10 +760,10 @@ export default class EssentialMenu {
             this._launcher.opacity = 0;
             this._launcher.scale_x = 0.94;
             this._launcher.scale_y = 0.94;
-            // Down out of the capsule; up out of it with the bar at the bottom.
-            const above = this._launcherAnchor !== null && this._launcherAnchor !== undefined;
-            this._launcher.set_position(x, above ? targetY + 16 : targetY - 16);
-            this._launcher.set_pivot_point(0.5, above ? 1.0 : 0.0);
+            // Out of where it opens: down from the top, up from the bottom, out from the middle (`_positionLauncher`).
+            const motion = this._launcherMotion ?? {dy: -16, pivotX: 0.5, pivotY: 0};
+            this._launcher.set_position(x, targetY + motion.dy);
+            this._launcher.set_pivot_point(motion.pivotX, motion.pivotY);
 
             this._launcher.ease({
                 opacity: 255,
@@ -870,10 +881,12 @@ export default class EssentialMenu {
         }
 
         const [x, currentY] = this._launcher.get_position();
-        const above = this._launcherAnchor !== null && this._launcherAnchor !== undefined;
+        // Back the way it came, a little less far.
+        const motion = this._launcherMotion ?? {dy: -16, pivotX: 0.5, pivotY: 0};
+        this._launcher.set_pivot_point(motion.pivotX, motion.pivotY);
         this._launcher.ease({
             opacity: 0,
-            y: above ? currentY + 12 : currentY - 12,
+            y: currentY + Math.round(motion.dy * 0.75),
             scale_x: 0.95,
             scale_y: 0.95,
             duration: 150,
@@ -2259,6 +2272,44 @@ export default class EssentialMenu {
         );
         let x = Math.floor(monitor.x + (monitor.width - width) / 2);
         let y = Math.floor(monitor.y + Math.max(72, monitor.height * LAUNCHER_TOP_RATIO));
+        this._launcherAnchor = null;
+        this._launcherMiddle = null;
+        this._launcherMotion = {dy: -16, pivotX: 0.5, pivotY: 0};
+        // Settings → Launcher opens at: a place of its own on the screen (inside the work area, clear of the bar), not
+        // out of Panel Island's capsule; its glass its own there. Its bottom (or middle) kept where it is as its results
+        // change its height (`_keepAboveCapsule`).
+        const place = this._launcherPlace();
+        if (place !== 'capsule') {
+            const area = Main.layoutManager.getWorkAreaForMonitor(monitor.index);
+            const margin = 16;
+            const middleX = Math.floor(area.x + (area.width - width) / 2);
+            const height = Math.ceil(this._launcher.get_preferred_height(width)[1]);
+            if (place === 'top-middle') {
+                x = middleX;
+                y = Math.floor(area.y + margin);
+                this._launcherMotion = {dy: -16, pivotX: 0.5, pivotY: 0};
+            } else if (place === 'centre') {
+                x = middleX;
+                this._launcherMiddle = Math.floor(area.y + area.height / 2);
+                y = this._launcherMiddle - Math.ceil(height / 2);
+                this._launcherMotion = {dy: 0, pivotX: 0.5, pivotY: 0.5};
+            } else {
+                x = place === 'bottom-left' ? Math.floor(area.x + margin) : middleX;
+                this._launcherAnchor = Math.floor(area.y + area.height - margin);
+                y = this._launcherAnchor - height;
+                this._launcherMotion = {dy: 16, pivotX: place === 'bottom-left' ? 0 : 0.5, pivotY: 1};
+            }
+            if (!this._launcher._aboveCapsuleId)
+                this._launcher._aboveCapsuleId = this._launcher.connect('notify::height', () => this._keepAboveCapsule());
+            this._launcher.set_width(width);
+            this._launcher.set_position(x, y);
+            if (this._scrim) {
+                this._scrim.set_position(monitor.x, monitor.y);
+                this._scrim.set_size(monitor.width, monitor.height);
+            }
+            this._updateResultsHeight();
+            return;
+        }
         // With Panel Island: right under its left capsule, the glass growing out of it round the launcher. With
         // its bar at the bottom, right above it instead, its bottom kept there as its results change its height.
         // Panel Island may grow it out of its middle capsule instead (its Settings): centred under that one.
@@ -2269,7 +2320,6 @@ export default class EssentialMenu {
         } catch (e) {
             pill = island?.leftRect();
         }
-        this._launcherAnchor = null;
         if (pill) {
             const margin = 8;
             const from = pill.centre ? Math.round(pill.x + (pill.width - width) / 2) : pill.x;
@@ -2280,6 +2330,7 @@ export default class EssentialMenu {
                 above = Boolean(island.atBottom?.());
             } catch (e) {}
             if (above) {
+                this._launcherMotion = {dy: 16, pivotX: 0.5, pivotY: 1};
                 this._launcherAnchor = Math.floor(pill.y - 6);
                 y = this._launcherAnchor - Math.ceil(this._launcher.get_preferred_height(width)[1]);
                 if (!this._launcher._aboveCapsuleId)
@@ -2303,11 +2354,13 @@ export default class EssentialMenu {
      * results change (`_updateResultsHeight`), not a frame after. */
     _keepAboveCapsule() {
         const launcher = this._launcher;
-        if (!launcher || this._launcherAnchor === null || this._launcherAnchor === undefined || !this._isOpen ||
-            this._isAnimatingOpen)
+        const bottom = this._launcherAnchor, middle = this._launcherMiddle;
+        const kept = v => v !== null && v !== undefined;
+        if (!launcher || (!kept(bottom) && !kept(middle)) || !this._isOpen || this._isAnimatingOpen)
             return;
         const width = launcher.width > 0 ? launcher.width : -1;
-        const y = this._launcherAnchor - Math.ceil(launcher.get_preferred_height(width)[1]);
+        const height = Math.ceil(launcher.get_preferred_height(width)[1]);
+        const y = kept(bottom) ? bottom - height : middle - Math.ceil(height / 2);
         if (launcher.y !== y)
             launcher.y = y;
     }

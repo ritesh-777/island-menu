@@ -125,6 +125,8 @@ Open the Extensions app, find **Island Menu**, and click the settings button. Se
   off, GNOME's own switchers have them again.
 - **Super key opens the menu** — Instead of the overview, which stays on the Activities button and Super+A.
 - **Keyboard shortcut** — Super+Space by default.
+- **Launcher opens at** — out of Panel Island's capsule (default), or a place of its own: top middle (coming down),
+  the centre of the screen (opening out), bottom left or bottom middle (rising up), with its own glass there.
 - **Top bar button**, **Top bar icon** (your system's logo, or the app grid) and **Top bar button placement**
   (before or after the workspaces, or in the middle before the clock: Panel Island's middle capsule, where it is shown).
 
