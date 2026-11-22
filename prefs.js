@@ -110,6 +110,12 @@ export default class IslandMenuPreferences extends ExtensionPreferences {
             ['system', 'System logo', 'This system\'s own logo, black or white as the bar is'],
             ['grid', 'App grid'],
         ]));
+        opening.add(choiceRow(settings, 'menu-highlight-style', 'Highlight style', [
+            ['classic', 'Classic', 'An accent ring round the search field, the chosen app tinted in the accent colour'],
+            ['lens', 'Glass lens', 'Brighter glass, an accent line under the field and an accent bar by the chosen app'],
+            ['capsule', 'Accent capsule', 'A soft accent glow round the field, the chosen app a solid accent pill'],
+            ['edge', 'Minimal edge', 'No fill: an accent bar and a bold name mark the chosen app'],
+        ]));
         opening.add(choiceRow(settings, 'menu-launcher-place', 'Launcher opens at', [
             ['capsule', 'Panel Island\'s capsule', 'Its glass growing out of the capsule (near the top without Panel Island)'],
             ['top-middle', 'Top middle', 'Under the top bar, centred, coming down'],

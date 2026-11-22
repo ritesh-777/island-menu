@@ -30,6 +30,17 @@
       <summary>Top bar icon</summary>
       <description>system: the logo of the system it runs on (Ubuntu's, Fedora's…), found on the system and drawn black or white as the bar's text is. grid: the app grid.</description>
     </key>
+    <key name="menu-highlight-style" type="s">
+      <choices>
+        <choice value="classic"/>
+        <choice value="lens"/>
+        <choice value="capsule"/>
+        <choice value="edge"/>
+      </choices>
+      <default>'classic'</default>
+      <summary>Highlight style</summary>
+      <description>How the focused search field and the chosen result look. classic: an accent ring round the field, the result tinted in the accent colour. lens: the field brighter with an accent line along its foot, the result on brighter glass with an accent bar and a bold name. capsule: a soft accent glow round the field, the result a solid accent pill. edge: the field only brighter, the result marked by an accent bar and a bold name, no fill.</description>
+    </key>
     <key name="menu-launcher-place" type="s">
       <choices>
         <choice value="capsule"/>

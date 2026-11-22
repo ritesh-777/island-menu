@@ -599,6 +599,23 @@ export default class EssentialMenu {
         }
     }
 
+    /** Settings → Highlight style: how the focused search field and the chosen result look ('classic', as before; or
+     * 'lens', 'capsule', 'edge'): one style class on the launcher (stylesheet.css), with its light glass's own. */
+    _syncHighlightStyle() {
+        const launcher = this._launcher;
+        if (!launcher) return;
+        let style = 'classic';
+        try {
+            style = this._settings?.get_string('menu-highlight-style') || 'classic';
+        } catch (e) {}
+        for (const name of ['lens', 'capsule', 'edge']) {
+            launcher.remove_style_class_name(`island-menu-hl-${name}`);
+            launcher.remove_style_class_name(`island-menu-hl-${name}-light`);
+        }
+        if (style !== 'classic')
+            launcher.add_style_class_name(`island-menu-hl-${style}${this._isDark ? '' : '-light'}`);
+    }
+
     /** Panel Island's glass service (`global.panel_island`), if it is on with a left capsule to grow out of. */
     _panelIsland() {
         const island = global.panel_island;
@@ -651,6 +668,7 @@ export default class EssentialMenu {
                 this._rebuildAppIndex();
             }
             this._ensureLauncher();
+            this._syncHighlightStyle();
             this._positionLauncher();
             this._setSearchText('');
             this._renderResults('');
@@ -941,6 +959,7 @@ export default class EssentialMenu {
         };
 
         bindKey('menu-show-panel-icon', () => this._syncPanelIcon());
+        bindKey('menu-highlight-style', () => this._syncHighlightStyle());
         bindKey('menu-panel-icon', () => this._syncPanelIconImage());
         bindKey('menu-panel-icon-placement', () => {
             this._syncPanelIconPlacement();
