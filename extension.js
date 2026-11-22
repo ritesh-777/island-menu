@@ -77,6 +77,9 @@ function importEssentialsShelf(settings) {
     }
 }
 
+/** Whether this shell has had its first enable of the extension since login (Settings → At login). */
+let loginSeen = false;
+
 export default class IslandMenuExtension extends Extension {
     enable() {
         this._own = this.getSettings();
@@ -105,16 +108,29 @@ export default class IslandMenuExtension extends Extension {
         this._syncEmptyWorkspaces();
         this._syncAltTab();
         // Settings → At login: Island Menu: open once GNOME has finished starting (on the desktop: start-in-overview
-        // is off with it).
-        if (this._own.get_boolean('open-at-login') && Main.layoutManager._startingUp) {
-            Main.layoutManager.connectObject('startup-complete', () => {
-                Main.layoutManager.disconnectObject(this);
-                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => {
-                    if (this._menu && !Main.overview.visible)
-                        this._menu.open();
-                    return GLib.SOURCE_REMOVE;
-                });
-            }, this);
+        // is off with it). On the first enable in this shell only, however late GNOME gets to it: extensions are
+        // enabled one after another, so this one may come only after GNOME's start is over (it was then never opened).
+        // Not again as the screen is unlocked or the extension turned off and on (this module stays loaded).
+        if (!loginSeen) {
+            loginSeen = true;
+            if (this._own.get_boolean('open-at-login')) {
+                const openSoon = () => {
+                    this._loginId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => {
+                        this._loginId = 0;
+                        if (this._menu && !Main.overview.visible)
+                            this._menu.open();
+                        return GLib.SOURCE_REMOVE;
+                    });
+                };
+                if (Main.layoutManager._startingUp) {
+                    Main.layoutManager.connectObject('startup-complete', () => {
+                        Main.layoutManager.disconnectObject(this);
+                        openSoon();
+                    }, this);
+                } else {
+                    openSoon();
+                }
+            }
         }
         // Settings → Workspaces, in Panel Island's left capsule (workspaces.js).
         try {
@@ -188,6 +204,11 @@ export default class IslandMenuExtension extends Extension {
     }
 
     disable() {
+        // An opening at login still waiting: not after the menu is gone.
+        if (this._loginId) {
+            GLib.source_remove(this._loginId);
+            this._loginId = 0;
+        }
         // GNOME's switcher given Alt+Tab back first, whatever else.
         try {
             this._altTab?.destroy();

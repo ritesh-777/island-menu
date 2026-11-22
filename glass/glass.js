@@ -8,6 +8,7 @@
 // only there, blurred by GNOME Shell's blur and cut to the island's shape by a shader.
 
 import Clutter from 'gi://Clutter';
+import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import Graphene from 'gi://Graphene';
@@ -138,6 +139,9 @@ class BackdropMask extends ShapeMask {
         this._shapedAt = 0;
         this._blurredAt = 0;
         this._catchUp = 0;
+        /** Its least time between blurs as a workspace switch slides under it (see `syncSwitch`): 0 every frame (Live),
+         * `FROZEN_MS` held still; null its usual `BACKDROP_FRAME_MS`. */
+        this.frameMs = null;
     }
 
     /** The shape (or tone) changed now: the island is moving, or just was. */
@@ -149,7 +153,7 @@ class BackdropMask extends ShapeMask {
         const now = GLib.get_monotonic_time();
         const dirty = flags & Clutter.EffectPaintFlags.ACTOR_DIRTY;
         const resting = now - this._shapedAt > SETTLE_MS * 1000;
-        const wait = BACKDROP_FRAME_MS * 1000 - (now - this._blurredAt);
+        const wait = (this.frameMs ?? BACKDROP_FRAME_MS) * 1000 - (now - this._blurredAt);
         if (dirty && resting && wait > 0 && this._blurredAt) {
             // Shown as it was; blurred again when its time comes (the actor stays dirty until then).
             this._queueCatchUp(Math.ceil(wait / 1000));
@@ -309,11 +313,14 @@ class GlassBackdrop extends St.Widget {
         /** Whether a copy is hidden, under other windows (see `_prune`), and the look that hides those. */
         this._pruned = false;
         this._pruneLater = 0;
+        // Shown or hidden (the menu opening or closing): a workspace switch's scene given to it, or taken back.
+        this.connect('notify::mapped', () => syncSwitch(this));
         // Going with the island (Isle off, the shell shutting down): its signals and copies go with it; only a
         // pending look is taken back, as the shell may already be gone.
         this.connect('destroy', () => {
             this._on = false;
             this._mask.stopCatchUp();
+            unfollowSwitches(this);
             if (this._later)
                 global.compositor?.get_laters().remove(this._later);
             if (this._pruneLater)
@@ -360,6 +367,7 @@ class GlassBackdrop extends St.Widget {
         Main.panel.connectObject('notify::allocation', later, this);
         // The overview hides the windows; the island shows its colour alone there.
         Main.overview.connectObject('showing', () => this._syncVisible(), 'hidden', () => this._syncVisible(), this);
+        followSwitches(this);
         this._queueSync();
     }
 
@@ -375,6 +383,7 @@ class GlassBackdrop extends St.Widget {
         this._later = this._pruneLater = 0;
         this._pruned = false;
         this._mask.stopCatchUp();
+        unfollowSwitches(this);
         for (const object of [global.window_group, global.display, Main.layoutManager.panelBox, Main.panel, Main.overview])
             object.disconnectObject(this);
         this._watched.forEach(actor => actor.disconnectObject(this));
@@ -615,7 +624,314 @@ class GlassBackdrop extends St.Widget {
         this._mask.setUniforms(zip(LENS, [tone.knee ?? 0.55, (tone.lens ?? 0) * uiScale(), (tone.band ?? 1) * uiScale(),
             tone.spread ?? 0, tone.rim ?? 0, (tone.rimWidth ?? 1) * uiScale()]));
         // A new size can bring other windows under it.
-        if (!old || old.stageX !== stageX || old.stageY !== stageY || old.width !== width || old.height !== height)
+        if (!old || old.stageX !== stageX || old.stageY !== stageY || old.width !== width || old.height !== height) {
             this._syncWindows();
+            // A switch's scene, if one slides under it now, kept at its place over the new frame.
+            if (switchGroups.size)
+                syncSwitch(this);
+        }
     }
 });
+
+/*
+ * Settings → Glass during workspace switches (the menu's own, apart from Panel Island's for its glass): as a workspace
+ * switch slides (a swipe, a shortcut), GNOME draws a group of its own over the windows (each workspace's wallpaper and
+ * copies of its windows) and slides it. The glass copies the windows and the wallpaper, not that group, so by itself it
+ * shows the desktop it opened over, not the slide.
+ *  - always: held still: the blur from before the switch kept until it ends (no blur at all meanwhile), then blurred
+ *    again; lightest on the CPU.
+ *  - battery: held still on battery, live on mains.
+ *  - never: live: a copy of the sliding group in the glass's copies (over the windows, under the bar), blurred every
+ *    frame as it slides.
+ *  - live-efficient: live, the sliding group blurred at half the resolution (a quarter of the pixels) and drawn back
+ *    at full size: the blur is soft anyway, so it looks the same for much less work.
+ */
+
+const SWITCH_MODES = ['always', 'battery', 'never', 'live-efficient'];
+/** Held still: blurred again only after this long (the switch is over well before). */
+const FROZEN_MS = 60000;
+let switchMode = 'always';
+let onBattery = false;
+let upower = null;
+/** Our glass that is on, and the switch groups sliding now. */
+const switchBackdrops = new Set();
+const switchGroups = new Set();
+let switchWatch = null;
+
+const switchLive = () => switchMode === 'never' || switchMode === 'live-efficient' ||
+    (switchMode === 'battery' && !onBattery);
+
+/** Sets the mode (one of `SWITCH_MODES`); the glass looked at again at once. */
+export function setSwitchGlass(mode) {
+    const next = SWITCH_MODES.includes(mode) ? mode : 'always';
+    if (next === switchMode)
+        return;
+    switchMode = next;
+    if (switchMode === 'battery' && switchBackdrops.size)
+        watchPower();
+    else if (switchMode !== 'battery')
+        unwatchPower();
+    switchBackdrops.forEach(backdrop => syncSwitch(backdrop));
+}
+
+/** On battery (UPower's OnBattery), for 'battery'. */
+function watchPower() {
+    if (upower)
+        return;
+    try {
+        upower = Gio.DBusProxy.new_for_bus_sync(Gio.BusType.SYSTEM, Gio.DBusProxyFlags.NONE, null,
+            'org.freedesktop.UPower', '/org/freedesktop/UPower', 'org.freedesktop.UPower', null);
+        const sync = () => {
+            const now = Boolean(upower?.get_cached_property('OnBattery')?.unpack());
+            if (now === onBattery)
+                return;
+            onBattery = now;
+            switchBackdrops.forEach(backdrop => syncSwitch(backdrop));
+        };
+        upower.connect('g-properties-changed', sync);
+        sync();
+    } catch (e) {
+        console.warn(`[island-menu] Battery state not known (the glass is live during switches): ${e.message}`);
+        upower = null;
+    }
+}
+
+function unwatchPower() {
+    upower?.run_dispose?.();
+    upower = null;
+    onBattery = false;
+}
+
+/** Whether `actor` is a workspace switch's group (workspaceAnimation.js MonitorGroup). */
+function isSwitchGroup(actor) {
+    const name = actor?.constructor?.$gtype?.name ?? '';
+    return actor?.constructor?.name === 'MonitorGroup' || name.endsWith('MonitorGroup');
+}
+
+/** Where a switch's group is on the screen: the monitor it slides on (the group itself is sized by a constraint only
+ * once laid out, as wide as all its workspaces side by side until then). */
+function groupBox(group) {
+    const m = group._monitor;
+    if (m && [m.x, m.y, m.width, m.height].every(Number.isFinite) && m.width > 0 && m.height > 0)
+        return {x: m.x, y: m.y, width: m.width, height: m.height};
+    return {x: group.x, y: group.y, width: group.width, height: group.height};
+}
+
+function switchChanged() {
+    switchBackdrops.forEach(backdrop => syncSwitch(backdrop));
+}
+
+function watchSwitchGroups() {
+    if (switchWatch)
+        return;
+    const uiGroup = Main.layoutManager.uiGroup;
+    const added = (_group, actor) => {
+        if (!isSwitchGroup(actor) || switchGroups.has(actor))
+            return;
+        switchGroups.add(actor);
+        actor.connectObject('destroy', () => {
+            switchGroups.delete(actor);
+            switchChanged();
+        }, switchGroups);
+        switchChanged();
+    };
+    const removed = (_group, actor) => {
+        if (!switchGroups.delete(actor))
+            return;
+        actor.disconnectObject?.(switchGroups);
+        switchChanged();
+    };
+    switchWatch = [uiGroup.connect('child-added', added), uiGroup.connect('child-removed', removed)];
+    uiGroup.get_children().forEach(actor => added(uiGroup, actor));
+}
+
+function unwatchSwitchGroups() {
+    if (!switchWatch)
+        return;
+    const uiGroup = Main.layoutManager.uiGroup;
+    switchWatch.forEach(id => uiGroup.disconnect(id));
+    switchWatch = null;
+    for (const actor of switchGroups)
+        actor.disconnectObject?.(switchGroups);
+    switchGroups.clear();
+}
+
+/** `backdrop` (just turned on) given each switch's scene as it slides. */
+function followSwitches(backdrop) {
+    switchBackdrops.add(backdrop);
+    watchSwitchGroups();
+    if (switchMode === 'battery')
+        watchPower();
+    syncSwitch(backdrop);
+}
+
+/** `backdrop` (turning off, or going) let go of; nothing watched once no glass is on. */
+function unfollowSwitches(backdrop) {
+    if (!switchBackdrops.delete(backdrop))
+        return;
+    try {
+        dropSwitch(backdrop);
+        setFrameMs(backdrop, null);
+    } catch {}
+    if (!switchBackdrops.size) {
+        unwatchSwitchGroups();
+        unwatchPower();
+        holder?.destroy();
+        holder = null;
+    }
+}
+
+function setFrameMs(backdrop, ms) {
+    const mask = backdrop._mask;
+    if (!mask || mask.frameMs === ms)
+        return;
+    const was = mask.frameMs;
+    mask.frameMs = ms;
+    // Held still until now: blurred again at once, from what is there now.
+    if (was === FROZEN_MS) {
+        mask.stopCatchUp();
+        backdrop.queue_redraw();
+    }
+}
+
+/** Never drawn itself: holds the half-size frames (live-efficient), drawn only through their clones in the glass. */
+const Unpainted = GObject.registerClass({GTypeName: 'IslandMenuOwnUnpainted'}, class Unpainted extends Clutter.Actor {
+    vfunc_paint(_paintContext) {}
+
+    vfunc_pick(_pickContext) {}
+});
+let holder = null;
+
+/** Its scene copies out, its own frame back. */
+function dropSwitch(backdrop) {
+    const full = backdrop._switchCopies;
+    if (full) {
+        full.forEach(copy => copy.destroy());
+        backdrop._switchCopies = null;
+    }
+    const half = backdrop._switchHalf;
+    if (half) {
+        backdrop._switchHalf = null;
+        try {
+            half.clone.destroy();
+        } catch {}
+        try {
+            half.frame.destroy();
+        } catch {}
+        try {
+            backdrop._frame.visible = true;
+        } catch {}
+    }
+}
+
+/** `backdrop` given what a switch sliding now calls for (see above), or put back as it was. */
+function syncSwitch(backdrop) {
+    try {
+        const active = switchGroups.size > 0 && backdrop._on && backdrop.mapped && !Main.overview.visible &&
+            Boolean(backdrop._frameRect());
+        if (!active) {
+            dropSwitch(backdrop);
+            setFrameMs(backdrop, null);
+            return;
+        }
+        if (!switchLive()) {
+            dropSwitch(backdrop);
+            setFrameMs(backdrop, FROZEN_MS);
+            return;
+        }
+        setFrameMs(backdrop, 0);
+        if (switchMode === 'live-efficient' && backdrop._blur.radius >= 2)
+            syncHalf(backdrop);
+        else
+            syncFull(backdrop);
+    } catch (e) {
+        console.warn(`[island-menu] Glass during a workspace switch: ${e}`);
+        dropSwitch(backdrop);
+        setFrameMs(backdrop, null);
+    }
+}
+
+/** Live: a copy of each sliding group among its copies, over the windows and under the bar, drawing over its frame. */
+function syncFull(backdrop) {
+    if (backdrop._switchHalf)
+        dropSwitch(backdrop);
+    const copies = backdrop._switchCopies ??= new Map();
+    for (const [group, copy] of copies) {
+        if (!switchGroups.has(group)) {
+            copy.destroy();
+            copies.delete(group);
+        }
+    }
+    const rect = backdrop._frameRect();
+    for (const group of switchGroups) {
+        let copy = copies.get(group);
+        if (!copy) {
+            copy = new AreaClone(group);
+            if (backdrop._bar?.get_parent() === backdrop._layers)
+                backdrop._layers.insert_child_below(copy, backdrop._bar);
+            else
+                backdrop._layers.add_child(copy);
+            copies.set(group, copy);
+        }
+        const box = groupBox(group);
+        copy.set_position(box.x, box.y);
+        copy.set_size(box.width, box.height);
+        copy.paintArea = {x: rect.x - box.x, y: rect.y - box.y, width: rect.width, height: rect.height};
+    }
+}
+
+/** Live, efficient: the sliding groups blurred in a half-size frame of their own (radius halved), shown in place of
+ * the glass's own frame, drawn back at full size; its shape, tone and edge still its own on top. */
+function syncHalf(backdrop) {
+    if (backdrop._switchCopies)
+        dropSwitch(backdrop);
+    const d = 2;
+    let half = backdrop._switchHalf;
+    if (!half) {
+        if (!holder) {
+            holder = new Unpainted({reactive: false});
+            holder.connect('destroy', () => (holder = null));
+            Main.layoutManager.uiGroup.add_child(holder);
+        }
+        const frame = new St.Widget({clip_to_allocation: true, reactive: false});
+        const layers = new Clutter.Actor();
+        layers.set_pivot_point(0, 0);
+        layers.set_scale(1 / d, 1 / d);
+        frame.add_child(layers);
+        frame.add_effect(new Shell.BlurEffect({mode: Shell.BlurMode.ACTOR,
+            radius: Math.round(backdrop._blur.radius / d), brightness: backdrop._blur.brightness}));
+        holder.add_child(frame);
+        const clone = new Clutter.Clone({source: frame, reactive: false});
+        backdrop.insert_child_above(clone, backdrop._frame);
+        half = backdrop._switchHalf = {frame, layers, clone, copies: new Map()};
+    }
+    backdrop._frame.visible = false;
+    // On a grid of whole half-size pixels, so the frame's pixels fall on the screen's as it moves.
+    const r = backdrop._frameRect();
+    const x0 = d * Math.floor(r.x / d), y0 = d * Math.floor(r.y / d);
+    const x1 = d * Math.ceil((r.x + r.width) / d), y1 = d * Math.ceil((r.y + r.height) / d);
+    const strip = {x: x0, y: y0, width: Math.max(d, x1 - x0), height: Math.max(d, y1 - y0)};
+    half.frame.set_size(strip.width / d, strip.height / d);
+    half.layers.set_position(-strip.x / d, -strip.y / d);
+    for (const [group, copy] of half.copies) {
+        if (!switchGroups.has(group)) {
+            copy.destroy();
+            half.copies.delete(group);
+        }
+    }
+    for (const group of switchGroups) {
+        let copy = half.copies.get(group);
+        if (!copy) {
+            copy = new AreaClone(group);
+            half.layers.add_child(copy);
+            half.copies.set(group, copy);
+        }
+        const box = groupBox(group);
+        copy.set_position(box.x, box.y);
+        copy.set_size(box.width, box.height);
+        copy.paintArea = {x: strip.x - box.x, y: strip.y - box.y, width: strip.width, height: strip.height};
+    }
+    const rect = backdrop._rect;
+    half.clone.set_position(strip.x - Math.round(rect.stageX), strip.y - Math.round(rect.stageY));
+    half.clone.set_size(strip.width, strip.height);
+}

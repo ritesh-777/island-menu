@@ -30,6 +30,26 @@
       <summary>Top bar icon</summary>
       <description>system: the logo of the system it runs on (Ubuntu's, Fedora's…), found on the system and drawn black or white as the bar's text is. grid: the app grid.</description>
     </key>
+    <key name="menu-switch-glass" type="s">
+      <choices>
+        <choice value="always"/>
+        <choice value="battery"/>
+        <choice value="never"/>
+        <choice value="live-efficient"/>
+      </choices>
+      <default>'always'</default>
+      <summary>Glass during workspace switches</summary>
+      <description>The menu's own glass as a workspace switch slides under it (the menu kept open on empty workspaces), apart from Panel Island's setting for its glass. always: held still (blurred again once the switch is over), lightest on the CPU. battery: held still on battery only, live on mains. never: live, following the slide every frame. live-efficient: live, blurred at half resolution.</description>
+    </key>
+    <key name="menu-search-position" type="s">
+      <choices>
+        <choice value="top"/>
+        <choice value="bottom"/>
+      </choices>
+      <default>'top'</default>
+      <summary>Search field</summary>
+      <description>top: the search field above its results (as before). bottom: the results above, then the hints, then the search field, nearest the launcher's bottom edge.</description>
+    </key>
     <key name="menu-highlight-style" type="s">
       <choices>
         <choice value="classic"/>
@@ -44,6 +64,8 @@
     <key name="menu-launcher-place" type="s">
       <choices>
         <choice value="capsule"/>
+        <choice value="capsule-middle"/>
+        <choice value="top-left"/>
         <choice value="top-middle"/>
         <choice value="centre"/>
         <choice value="bottom-left"/>
@@ -51,7 +73,7 @@
       </choices>
       <default>'capsule'</default>
       <summary>Launcher opens at</summary>
-      <description>capsule: out of Panel Island's capsule, its glass growing out of it (near the top without Panel Island). top-middle: under the top bar, centred, coming down. centre: the middle of the screen, opening out from there. bottom-left, bottom-middle: at the bottom, rising up. These four have the launcher's own glass, and keep it clear of the bar.</description>
+      <description>capsule: out of Panel Island's left capsule, its glass growing out of it (near the top without Panel Island), with the bar at the top or the bottom. capsule-middle: out of Panel Island's middle capsule (the clock's), centred on it, where it is shown; the left capsule where it is not (Isle's island holding the clock, the bar at the top). top-left: at the top left, under the top bar, coming down. top-middle: under the top bar, centred, coming down. centre: the middle of the screen, opening out from there. bottom-left, bottom-middle: at the bottom, rising up. These five have the launcher's own glass, and keep it clear of the bar.</description>
     </key>
     <key name="menu-panel-icon-placement" type="s">
       <choices>

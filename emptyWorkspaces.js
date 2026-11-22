@@ -104,6 +104,21 @@ export class EmptyWorkspaces {
         this._workspace = null;
         this._watch(this._manager.get_active_workspace());
         this._manager.connectObject('workspace-switched', () => this._switched(), this);
+        // Opened by hand (Super, a click) on an empty workspace: kept through switches to empty ones like its own,
+        // not closed by the switch and opened again there.
+        this._adoptHook = () => this._adopt();
+        const current = this._menu();
+        if (current)
+            current.onOpened = this._adoptHook;
+    }
+
+    _adopt() {
+        const menu = this._menu();
+        if (!menu?._isOpen || this._ours(menu) || !this._empty())
+            return;
+        this._openedByUs = menu._openCount;
+        menu.holdOpen?.(true);
+        trace('opened by hand on an empty workspace: held like its own');
     }
 
     _watch(workspace) {
@@ -228,6 +243,9 @@ export class EmptyWorkspaces {
     }
 
     destroy() {
+        const menu = this._menu();
+        if (menu && menu.onOpened === this._adoptHook)
+            menu.onOpened = null;
         this._manager.disconnectObject(this);
         this._workspace?.disconnectObject(this);
         this._timeouts.forEach(id => clearTimeout(id));

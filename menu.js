@@ -19,6 +19,7 @@ import * as SystemActions from 'resource:///org/gnome/shell/misc/systemActions.j
 import { classifyAppInstallSource } from './appInstallSource.js';
 import { launcherMatcher, fuzzyScore, loosen } from './fuzzy.js';
 import { GlassPanel } from './glassPanel.js';
+import { setSwitchGlass } from './glass/glass.js';
 import { makeDistroIcon } from './distroIcon.js';
 
 const DEBUG = false;
@@ -590,13 +591,46 @@ export default class EssentialMenu {
     }
 
     /** Settings → Launcher opens at: 'capsule' (out of Panel Island's capsule, or near the top without it), or a place
-     * of its own: 'top-middle', 'centre', 'bottom-left', 'bottom-middle'. */
+     * of its own: 'top-left', 'top-middle', 'centre', 'bottom-left', 'bottom-middle'. */
     _launcherPlace() {
         try {
-            return this._settings?.get_string('menu-launcher-place') || 'capsule';
+            const place = this._settings?.get_string('menu-launcher-place') || 'capsule';
+            return place === 'capsule-middle' ? 'capsule' : place;
         } catch (e) {
             return 'capsule';
         }
+    }
+
+    /** Out of Panel Island's capsule: which one ('left', or 'centre' for the middle one; Panel Island uses the left one
+     * where there is no middle one), told to Panel Island before it is asked where or for its glass. */
+    _capsuleSide(island) {
+        let side = 'left';
+        try {
+            side = this._settings?.get_string('menu-launcher-place') === 'capsule-middle' ? 'centre' : 'left';
+        } catch (e) {}
+        try {
+            island?.setFrom?.(side);
+        } catch (e) {}
+        return side;
+    }
+
+    /** Settings → Search field: at the top (the search, its results, the hints), or at the bottom (the results, the
+     * hints, then the search, nearest the bottom edge). Its gap to the results kept on the side they are. */
+    _syncSearchPosition() {
+        const launcher = this._launcher, search = this._searchRow, results = this._resultsScrollView, hints = this._helpRow;
+        if (!launcher || !search || !results || !hints || search.get_parent() !== launcher) return;
+        let bottom = false;
+        try {
+            bottom = this._settings?.get_string('menu-search-position') === 'bottom';
+        } catch (e) {}
+        if (bottom) {
+            launcher.set_child_above_sibling(search, hints);
+            search.set_style('spacing: 8px; margin-top: 10px');
+        } else {
+            launcher.set_child_below_sibling(search, results);
+            search.set_style('spacing: 8px; margin-bottom: 10px');
+        }
+        this._keepAboveCapsule();
     }
 
     /** Settings → Highlight style: how the focused search field and the chosen result look ('classic', as before; or
@@ -669,6 +703,7 @@ export default class EssentialMenu {
             }
             this._ensureLauncher();
             this._syncHighlightStyle();
+            this._syncSearchPosition();
             this._positionLauncher();
             this._setSearchText('');
             this._renderResults('');
@@ -678,6 +713,12 @@ export default class EssentialMenu {
         }
 
         this._isOpen = true;
+        // Told it opened (emptyWorkspaces.js: opened by hand on an empty workspace, it is kept like its own).
+        try {
+            this.onOpened?.();
+        } catch (e) {
+            logError('Failed to tell of the launcher opening: ' + e.message);
+        }
         this._startRowBlink();
 
         if (this._themeSyncTimerId > 0) {
@@ -709,6 +750,10 @@ export default class EssentialMenu {
         this._launcher.set_style(island ? this._islandStyle() : this._ownStyle());
         if (this._glassPanel)
             this._glassPanel.enabled = !island;
+        // Its first height set at once, not eased from the last opening's (it is about to slide in anyway).
+        const animateOpen = this._settings?.get_boolean('menu-animations-enabled') ?? true;
+        if (animateOpen)
+            this._isAnimatingOpen = true;
         this._launcher.show();
         this._updateResultsHeight();
         this._launcher.remove_all_transitions();
@@ -745,6 +790,7 @@ export default class EssentialMenu {
         this._connectStageCapture();
         this._scheduleSearchFocus();
         // The glass grown round it (as it moves into place too); not to be had, its own background back.
+        this._capsuleSide(island);
         this._onIsland = Boolean(island?.open(this._launcher, {light: !this._isDark}));
         if (island && !this._onIsland) {
             this._launcher.set_style(this._ownStyle());
@@ -752,7 +798,27 @@ export default class EssentialMenu {
                 this._glassPanel.enabled = true;
         }
 
+        // Centre of the screen: centred round its height now, its search field its anchor from here on.
+        if (this._launcherCentre) {
+            this._settleCentre();
+            // Cut to the room it has from there (a short screen), and centred again round that.
+            this._updateResultsHeight();
+            this._settleCentre();
+        }
+        // Kept by its bottom (or middle): placed again from the height it has now — its first results in and its style
+        // set — so it slides in to where it stays, not to where the last opening's height put it and then jumps.
+        {
+            const kept = v => v !== null && v !== undefined;
+            const bottom = this._launcherAnchor, middle = this._launcherMiddle;
+            if (kept(bottom) || kept(middle)) {
+                const w = this._launcher.width > 0 ? this._launcher.width : -1;
+                const h = Math.ceil(this._launcher.get_preferred_height(w)[1]);
+                this._launcher.y = kept(bottom) ? bottom - h : middle - Math.ceil(h / 2);
+            }
+        }
+        this._launcher.translation_y = 0;
         const [x, targetY] = this._launcher.get_position();
+        this._openTargetY = targetY;
         const animEnabled = this._settings?.get_boolean('menu-animations-enabled') ?? true;
 
         if (!animEnabled) {
@@ -828,6 +894,11 @@ export default class EssentialMenu {
             return;
         }
         this._stopRowBlink();
+        // A resize under way left where it is, its rows back as laid out.
+        if (this._resultsEase) {
+            this._stopResultsEase();
+            this._rowsAtFrame(this._resultsScrollView, this._resultsHeightTarget ?? 0, true);
+        }
         this._endAltTab();
 
         this._isOpen = false;
@@ -958,8 +1029,19 @@ export default class EssentialMenu {
             this._settingsHandlers.push(id);
         };
 
+        // Settings → Glass during workspace switches: the menu's own glass (glass/glass.js).
+        const syncSwitchGlass = () => {
+            try {
+                setSwitchGlass(this._settings.get_string('menu-switch-glass'));
+            } catch (e) {
+                logError('Failed to set the glass during workspace switches: ' + e.message);
+            }
+        };
+        bindKey('menu-switch-glass', syncSwitchGlass);
+        syncSwitchGlass();
         bindKey('menu-show-panel-icon', () => this._syncPanelIcon());
         bindKey('menu-highlight-style', () => this._syncHighlightStyle());
+        bindKey('menu-search-position', () => this._syncSearchPosition());
         bindKey('menu-panel-icon', () => this._syncPanelIconImage());
         bindKey('menu-panel-icon-placement', () => {
             this._syncPanelIconPlacement();
@@ -2054,6 +2136,7 @@ export default class EssentialMenu {
     _destroyLauncher() {
         if (!this._launcher) return;
 
+        this._stopResultsEase();
         this._disconnectStageCapture();
         this._cancelSearchFocus();
         this._cancelFileSearch();
@@ -2159,6 +2242,7 @@ export default class EssentialMenu {
                 this._launchSelected();
         });
         searchRow.add_child(this._searchEntry);
+        this._searchRow = searchRow;
         this._launcher.add_child(searchRow);
 
         this._resultsScrollView = new St.ScrollView({
@@ -2268,6 +2352,7 @@ export default class EssentialMenu {
         helpRow.add_child(createHelpBadge(' ? ', 'Web Search', WEB_SEARCH_PREFIX));
         helpRow.add_child(createHelpBadge(' ~ ', 'File Search', FILE_SEARCH_PREFIX));
         helpRow.add_child(createHelpBadge(' # ', 'Shelf', SHELF_PREFIX));
+        this._helpRow = helpRow;
         this._launcher.add_child(helpRow);
     }
 
@@ -2293,6 +2378,8 @@ export default class EssentialMenu {
         let y = Math.floor(monitor.y + Math.max(72, monitor.height * LAUNCHER_TOP_RATIO));
         this._launcherAnchor = null;
         this._launcherMiddle = null;
+        this._launcherCentre = null;
+        this._launcherTop = null;
         this._launcherMotion = {dy: -16, pivotX: 0.5, pivotY: 0};
         // Settings → Launcher opens at: a place of its own on the screen (inside the work area, clear of the bar), not
         // out of Panel Island's capsule; its glass its own there. Its bottom (or middle) kept where it is as its results
@@ -2303,14 +2390,19 @@ export default class EssentialMenu {
             const margin = 16;
             const middleX = Math.floor(area.x + (area.width - width) / 2);
             const height = Math.ceil(this._launcher.get_preferred_height(width)[1]);
-            if (place === 'top-middle') {
-                x = middleX;
+            if (place === 'top-middle' || place === 'top-left') {
+                x = place === 'top-left' ? Math.floor(area.x + margin) : middleX;
                 y = Math.floor(area.y + margin);
-                this._launcherMotion = {dy: -16, pivotX: 0.5, pivotY: 0};
+                this._launcherMotion = {dy: -16, pivotX: place === 'top-left' ? 0 : 0.5, pivotY: 0};
             } else if (place === 'centre') {
+                // Centred as it opens; from then on its search field stays where it is (`_settleCentre`).
                 x = middleX;
-                this._launcherMiddle = Math.floor(area.y + area.height / 2);
-                y = this._launcherMiddle - Math.ceil(height / 2);
+                this._launcherCentre = {
+                    middle: Math.floor(area.y + area.height / 2),
+                    top: Math.floor(area.y + margin),
+                    bottom: Math.floor(area.y + area.height - margin),
+                };
+                y = Math.max(this._launcherCentre.top, this._launcherCentre.middle - Math.ceil(height / 2));
                 this._launcherMotion = {dy: 0, pivotX: 0.5, pivotY: 0.5};
             } else {
                 x = place === 'bottom-left' ? Math.floor(area.x + margin) : middleX;
@@ -2327,6 +2419,9 @@ export default class EssentialMenu {
                 this._scrim.set_size(monitor.width, monitor.height);
             }
             this._updateResultsHeight();
+            // Placed again while open (the displays changed): centred again round its height now.
+            if (this._isOpen && !this._isAnimatingOpen)
+                this._settleCentre();
             return;
         }
         // With Panel Island: right under its left capsule, the glass growing out of it round the launcher. With
@@ -2335,6 +2430,7 @@ export default class EssentialMenu {
         const island = this._panelIsland();
         let pill = null;
         try {
+            this._capsuleSide(island);
             pill = island?.panelRect?.() ?? island?.leftRect();
         } catch (e) {
             pill = island?.leftRect();
@@ -2368,6 +2464,31 @@ export default class EssentialMenu {
         this._updateResultsHeight();
     }
 
+    /** Settings → Launcher opens at → Centre of the screen: centred round the height it has now (inside the work
+     * area), and its search field made the anchor it grows and shrinks from — its top kept with the search field at
+     * the top (its results growing down), its bottom kept with the search field at the bottom (growing up). */
+    _settleCentre() {
+        const centre = this._launcherCentre, launcher = this._launcher;
+        if (!centre || !launcher)
+            return;
+        const width = launcher.width > 0 ? launcher.width : -1;
+        const height = Math.ceil(launcher.get_preferred_height(width)[1]);
+        const y = Math.max(centre.top, Math.min(centre.middle - Math.ceil(height / 2), centre.bottom - height));
+        let below = false;
+        try {
+            below = this._settings?.get_string('menu-search-position') === 'bottom';
+        } catch (e) {}
+        if (below) {
+            this._launcherAnchor = y + height;
+            this._launcherTop = null;
+        } else {
+            this._launcherAnchor = null;
+            this._launcherTop = y;
+        }
+        if (launcher.y !== y)
+            launcher.y = y;
+    }
+
     /** With Panel Island's bar at the bottom: the launcher's bottom kept just above the capsule as it grows or shrinks
      * (not while it slides in, which ends there). From the height it asks for, so it is moved in the same frame as its
      * results change (`_updateResultsHeight`), not a frame after. */
@@ -2375,13 +2496,25 @@ export default class EssentialMenu {
         const launcher = this._launcher;
         const bottom = this._launcherAnchor, middle = this._launcherMiddle;
         const kept = v => v !== null && v !== undefined;
-        if (!launcher || (!kept(bottom) && !kept(middle)) || !this._isOpen || this._isAnimatingOpen)
+        if (!launcher || (!kept(bottom) && !kept(middle)) || !this._isOpen)
             return;
         const width = launcher.width > 0 ? launcher.width : -1;
         const height = Math.ceil(launcher.get_preferred_height(width)[1]);
         const y = kept(bottom) ? bottom - height : middle - Math.ceil(height / 2);
+        if (this._isAnimatingOpen) {
+            // Its height changed as it slides in (typed at once): the slide left alone, shifted by the difference so it
+            // still ends with its bottom in place; the shift folded into its place as the slide ends (below).
+            if (Number.isFinite(this._openTargetY)) {
+                const shift = y - this._openTargetY;
+                if (launcher.translation_y !== shift)
+                    launcher.translation_y = shift;
+            }
+            return;
+        }
         if (launcher.y !== y)
             launcher.y = y;
+        if (launcher.translation_y !== 0)
+            launcher.translation_y = 0;
     }
 
     _updateResultsHeight() {
@@ -2403,7 +2536,22 @@ export default class EssentialMenu {
 
         try {
             const monitor = this._getTargetMonitor();
-            const maxResultsHeight = Math.max(260, Math.floor(monitor.height * RESULTS_MAX_HEIGHT_RATIO));
+            let maxResultsHeight = Math.max(260, Math.floor(monitor.height * RESULTS_MAX_HEIGHT_RATIO));
+            // Centre of the screen only: no taller than the room it has from its search field to the screen's edge
+            // (inside the work area), the search field and hints counted; its rows scroll rather than it running off.
+            const centre = this._launcherCentre;
+            if (centre && this._launcher) {
+                try {
+                    const kept = v => v !== null && v !== undefined;
+                    const width = this._launcher.width > 0 ? this._launcher.width : -1;
+                    const others = Math.max(0, Math.ceil(this._launcher.get_preferred_height(width)[1]) -
+                        Math.ceil(this._resultsScrollView.get_height()));
+                    const room = kept(this._launcherAnchor) ? this._launcherAnchor - centre.top - others
+                        : kept(this._launcherTop) ? centre.bottom - this._launcherTop - others : NaN;
+                    if (Number.isFinite(room))
+                        maxResultsHeight = Math.max(120, Math.min(maxResultsHeight, Math.floor(room)));
+                } catch (e) {}
+            }
             
             // Query the natural preferred height of the results box in real-time
             let [, naturalHeight] = this._resultsBox.get_preferred_height(-1);
@@ -2416,22 +2564,20 @@ export default class EssentialMenu {
             // new height while easing carries on from where it is.
             const targetHeight = Math.min(maxResultsHeight, naturalHeight);
             const view = this._resultsScrollView;
-            if (this._resultsHeightTarget !== targetHeight || (!view.get_transition('height') && view.get_height() !== targetHeight)) {
+            if (this._resultsHeightTarget !== targetHeight ||
+                (!view.get_transition('height') && !this._resultsEase && view.get_height() !== targetHeight)) {
                 this._resultsHeightTarget = targetHeight;
                 const current = view.get_height();
                 const animate = (this._settings?.get_boolean('menu-animations-enabled') ?? true) &&
                     St.Settings.get().enable_animations && this._isOpen && !this._isAnimatingOpen && view.mapped &&
                     current > 0 && Math.abs(current - targetHeight) > 2;
                 view.remove_transition('height');
+                this._stopResultsEase();
                 if (animate) {
-                    view.ease({
-                        height: targetHeight,
-                        duration: 160,
-                        mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
-                        onStopped: () => this._keepAboveCapsule(),
-                    });
+                    this._easeResultsKeptBelow(view, Math.round(current), Math.round(targetHeight));
                 } else {
                     view.set_height(targetHeight);
+                    this._rowsAtFrame(view, targetHeight, true);
                     this._keepAboveCapsule();
                 }
             }
@@ -2441,6 +2587,95 @@ export default class EssentialMenu {
 
         // Force a full background repaint
         this._queueBlurRedraw();
+    }
+
+    /** Its height eased frame by frame in whole pixels (every place: the glass and its edge on the same pixel). Kept
+     * by its bottom, on each frame, as it is set (before
+     * the frame is laid out), the launcher moved to keep its bottom where it is and its rows kept by the search field
+     * below them — the height, the place, the rows and the glass all from the same whole number, so none of them is
+     * a pixel off the others one frame and back the next (a shiver). Only its top edge moves. */
+    _easeResultsKeptBelow(view, from, to) {
+        const timeline = new Clutter.Timeline({actor: view, duration: 160});
+        timeline.set_progress_mode(Clutter.AnimationMode.EASE_OUT_CUBIC);
+        this._resultsEase = timeline;
+        const step = done => {
+            const h = done ? to : Math.round(from + (to - from) * timeline.get_progress());
+            if (view.get_height() !== h)
+                view.set_height(h);
+            this._keepAboveCapsule();
+            this._rowsAtFrame(view, to, done);
+        };
+        timeline.connect('new-frame', () => {
+            if (this._resultsEase === timeline)
+                step(false);
+        });
+        timeline.connect('completed', () => {
+            if (this._resultsEase !== timeline)
+                return;
+            this._resultsEase = null;
+            step(true);
+            if (this._selectionScrollWaiting) {
+                this._selectionScrollWaiting = false;
+                this._scrollSelectedIntoView();
+            }
+        });
+        timeline.start();
+    }
+
+    /** Its whole-pixel easing stopped where it is (a new height on the way, or the launcher going). */
+    _stopResultsEase() {
+        const timeline = this._resultsEase;
+        if (!timeline)
+            return;
+        this._resultsEase = null;
+        try {
+            timeline.stop();
+        } catch (e) {}
+    }
+
+    /** While its height eases with its bottom kept and the search field below the rows: the rows kept where they
+     * will be against the search field (the top edge uncovering or covering them), not carried along by the top
+     * edge. Growing, scrolled to show their lower part; shrinking, pushed down (the view clips them). `done`: back
+     * as laid out. */
+    _rowsAtFrame(view, targetHeight, done) {
+        const box = this._resultsBox;
+        if (!box || !view)
+            return;
+        let below = false;
+        try {
+            below = this._settings?.get_string('menu-search-position') === 'bottom';
+        } catch (e) {}
+        const anchored = this._launcherAnchor !== null && this._launcherAnchor !== undefined;
+        const adjustment = this._getResultsVAdjustment();
+        if (done || !below || !anchored) {
+            if (box.translation_y !== 0)
+                box.translation_y = 0;
+            if (this._rowsScrolledForEase && adjustment) {
+                adjustment.set_value(this._clampScrollValue(adjustment, 0));
+                this._scrollTargetValue = 0;
+            }
+            this._rowsScrolledForEase = false;
+            return;
+        }
+        const gap = Math.round(targetHeight - view.get_height());
+        if (gap > 0) {
+            // Growing: its lower rows shown, the upper ones uncovered as its top edge rises.
+            if (box.translation_y !== 0)
+                box.translation_y = 0;
+            if (adjustment) {
+                adjustment.set_value(this._clampScrollValue(adjustment, gap));
+                this._scrollTargetValue = adjustment.get_value();
+                this._rowsScrolledForEase = true;
+            }
+        } else {
+            // Shrinking: pushed down to the search field, covered from the top as its top edge comes down.
+            if (this._rowsScrolledForEase && adjustment) {
+                adjustment.set_value(this._clampScrollValue(adjustment, 0));
+                this._scrollTargetValue = 0;
+                this._rowsScrolledForEase = false;
+            }
+            box.translation_y = -gap;
+        }
     }
 
     _updateBlurTapes() {
@@ -4638,6 +4873,11 @@ export default class EssentialMenu {
 
     _scrollSelectedIntoViewDeferred() {
         if (this._isAnimatingOpen) return;
+        // A resize kept by its bottom moves the rows itself: done once it ends (`_easeResultsKeptBelow`).
+        if (this._resultsEase) {
+            this._selectionScrollWaiting = true;
+            return;
+        }
 
         const button = this._resultButtons[this._selectedIndex];
         const adjustment = this._getResultsVAdjustment();

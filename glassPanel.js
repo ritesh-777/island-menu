@@ -89,10 +89,20 @@ export class GlassPanel {
     _place() {
         if (!this._shown)
             return;
-        const [x, y] = this._actor.get_transformed_position();
-        const [width, height] = this._actor.get_transformed_size();
-        if (width <= 0 || height <= 0)
+        // Not scaled or slid (opening, closing): where it is being put this frame — its own place and size, given or
+        // asked for, before they are laid out — not where it was laid out last frame, one frame behind as it moves.
+        const actor = this._actor;
+        const still = actor.scale_x === 1 && actor.scale_y === 1 && actor.translation_x === 0 && actor.translation_y === 0;
+        const [x, y] = still ? [actor.get_x(), actor.get_y()] : actor.get_transformed_position();
+        const [width, height] = still ? [actor.get_width(), actor.get_height()] : actor.get_transformed_size();
+        // Not laid out yet (just after login, before the stage can say where it is drawn): tried again next frame, not
+        // placed at nowhere (NaN, which the size check alone let through, its glass then never laid out).
+        if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) {
+            if ((this._retries = (this._retries ?? 0) + 1) <= 120)
+                this._queue();
             return;
+        }
+        this._retries = 0;
         const s = scale();
         this.backdrop.set_position(Math.round(x), Math.round(y));
         this.backdrop.place({

@@ -125,10 +125,17 @@ Open the Extensions app, find **Island Menu**, and click the settings button. Se
   off, GNOME's own switchers have them again.
 - **Super key opens the menu** — Instead of the overview, which stays on the Activities button and Super+A.
 - **Keyboard shortcut** — Super+Space by default.
+- **Search field** — at the top (default) or the bottom of the launcher: below the results and the hints, nearest
+  its bottom edge (good with the launcher at the bottom of the screen).
 - **Highlight style** — how the focused search field and the chosen app look: Classic (default), Glass lens, Accent
   capsule or Minimal edge, each with its own look on light glass.
-- **Launcher opens at** — out of Panel Island's capsule (default), or a place of its own: top middle (coming down),
+- **Launcher opens at** — out of Panel Island's left capsule (default) or its middle one (the clock's, centred on
+  it; the left one while there is no middle capsule, as with Isle's island at the top), with the bar at the top or
+  the bottom; or a place of its own: top left or top middle (coming down),
   the centre of the screen (opening out), bottom left or bottom middle (rising up), with its own glass there.
+- **Glass during workspace switches** — the menu's own glass as a switch slides under it (the menu kept open on
+  empty workspaces), set apart from Panel Island's for its glass: held still (default, lightest), held still on
+  battery only, live, or live at half resolution.
 - **Top bar button**, **Top bar icon** (your system's logo, or the app grid) and **Top bar button placement**
   (before or after the workspaces, or in the middle before the clock: Panel Island's middle capsule, where it is shown).
 

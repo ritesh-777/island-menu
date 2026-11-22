@@ -5,6 +5,7 @@
 
 import Adw from 'gi://Adw';
 import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk';
 
 import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
@@ -22,14 +23,33 @@ function spinRow(settings, key, title, subtitle, {lower, upper, step, digits = 0
     return row;
 }
 
+/** Panel Island's settings, from where it is installed, or null. */
+function panelIslandSettings() {
+    const dirs = [GLib.get_user_data_dir(), ...GLib.get_system_data_dirs()]
+        .map(dir => GLib.build_filenamev([dir, 'gnome-shell', 'extensions', 'panel-island@ritesh', 'schemas']));
+    for (const dir of dirs) {
+        if (!GLib.file_test(GLib.build_filenamev([dir, 'gschemas.compiled']), GLib.FileTest.EXISTS))
+            continue;
+        try {
+            const source = Gio.SettingsSchemaSource.new_from_directory(dir, Gio.SettingsSchemaSource.get_default(), false);
+            const schema = source.lookup('org.gnome.shell.extensions.panel-island', true);
+            if (schema)
+                return new Gio.Settings({settings_schema: schema});
+        } catch (e) {}
+    }
+    return null;
+}
+
 function choiceRow(settings, key, title, choices) {
     const row = new Adw.ComboRow({title, model: Gtk.StringList.new(choices.map(([, label]) => label))});
     const sync = () => {
         const i = Math.max(0, choices.findIndex(([value]) => value === settings.get_string(key)));
         if (row.selected !== i)
             row.selected = i;
-        row.subtitle = choices[i][2] ?? '';
+        const subtitle = choices[i][2];
+        row.subtitle = (typeof subtitle === 'function' ? subtitle() : subtitle) ?? '';
     };
+    row.resync = sync;
     row.connect('notify::selected', () => {
         const value = choices[row.selected]?.[0];
         if (value && settings.get_string(key) !== value)
@@ -110,19 +130,47 @@ export default class IslandMenuPreferences extends ExtensionPreferences {
             ['system', 'System logo', 'This system\'s own logo, black or white as the bar is'],
             ['grid', 'App grid'],
         ]));
+        opening.add(choiceRow(settings, 'menu-search-position', 'Search field', [
+            ['top', 'Top', 'Above its results'],
+            ['bottom', 'Bottom', 'Below the results, nearest the launcher\'s bottom edge'],
+        ]));
         opening.add(choiceRow(settings, 'menu-highlight-style', 'Highlight style', [
             ['classic', 'Classic', 'An accent ring round the search field, the chosen app tinted in the accent colour'],
             ['lens', 'Glass lens', 'Brighter glass, an accent line under the field and an accent bar by the chosen app'],
             ['capsule', 'Accent capsule', 'A soft accent glow round the field, the chosen app a solid accent pill'],
             ['edge', 'Minimal edge', 'No fill: an accent bar and a bold name mark the chosen app'],
         ]));
-        opening.add(choiceRow(settings, 'menu-launcher-place', 'Launcher opens at', [
-            ['capsule', 'Panel Island\'s capsule', 'Its glass growing out of the capsule (near the top without Panel Island)'],
+        // Panel Island's middle capsule: shown with its Middle capsule on, or on Automatic while Isle's island is not
+        // at the top holding the clock (Isle off, or Panel Island's bar at the bottom).
+        const panelIsland = panelIslandSettings();
+        const shell = new Gio.Settings({schema_id: 'org.gnome.shell'});
+        const middleShown = () => {
+            if (!panelIsland)
+                return false;
+            const mode = panelIsland.get_string('centre-capsule');
+            if (mode !== 'auto')
+                return mode === 'on';
+            const isle = shell.get_strv('enabled-extensions').includes('isle@zickrian.github.io') &&
+                !shell.get_boolean('disable-user-extensions');
+            return !isle || panelIsland.get_boolean('bar-at-bottom');
+        };
+        const placeRow = choiceRow(settings, 'menu-launcher-place', 'Launcher opens at', [
+            ['capsule', 'Panel Island\'s left capsule', 'Its glass growing out of the left capsule, with the bar at the top or the bottom (near the top without Panel Island)'],
+            ['capsule-middle', 'Panel Island\'s middle capsule', () => middleShown()
+                ? 'Its glass growing out of the middle capsule (the clock\'s), centred on it'
+                : 'No middle capsule now (Isle\'s island holds the clock with the bar at the top): the left capsule is used until there is one'],
+            ['top-left', 'Top left', 'At the top left, under the top bar, coming down'],
             ['top-middle', 'Top middle', 'Under the top bar, centred, coming down'],
             ['centre', 'Centre of the screen', 'In the middle, opening out from there'],
             ['bottom-left', 'Bottom left', 'At the bottom left, rising up'],
             ['bottom-middle', 'Bottom middle', 'At the bottom, centred, rising up'],
-        ]));
+        ]);
+        opening.add(placeRow);
+        if (panelIsland) {
+            panelIsland.connect('changed::centre-capsule', () => placeRow.resync());
+            panelIsland.connect('changed::bar-at-bottom', () => placeRow.resync());
+        }
+        shell.connect('changed::enabled-extensions', () => placeRow.resync());
         opening.add(choiceRow(settings, 'menu-panel-icon-placement', 'Top bar button placement', [
             ['before-workspaces', 'Before the workspaces'],
             ['after-workspaces', 'After the workspaces'],
@@ -166,6 +214,12 @@ export default class IslandMenuPreferences extends ExtensionPreferences {
         ]));
         look.add(switchRow(settings, 'menu-animations-enabled', 'Animations', 'The menu animates as it opens and closes'));
         look.add(switchRow(settings, 'menu-backdrop-dim-enabled', 'Dim the screen', 'Behind the menu while it is open'));
+        look.add(choiceRow(settings, 'menu-switch-glass', 'Glass during workspace switches', [
+            ['always', 'Held still', 'Blurred again once the switch is over; lightest on the CPU'],
+            ['battery', 'Held still on battery', 'Live when plugged in'],
+            ['never', 'Live', 'Follows the slide every frame'],
+            ['live-efficient', 'Live, efficient', 'Follows the slide, blurred at half resolution'],
+        ]));
         page.add(look);
 
         const search = new Adw.PreferencesGroup({title: 'Search'});
