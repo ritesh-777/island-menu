@@ -19,6 +19,7 @@ import * as SystemActions from 'resource:///org/gnome/shell/misc/systemActions.j
 import { classifyAppInstallSource } from './appInstallSource.js';
 import { launcherMatcher, fuzzyScore, loosen } from './fuzzy.js';
 import { GlassPanel } from './glassPanel.js';
+import { MenuClock } from './clock.js';
 import { setSwitchGlass } from './glass/glass.js';
 import { makeDistroIcon } from './distroIcon.js';
 
@@ -38,6 +39,10 @@ const CALCULATOR_PREFIX = '=';
 const WEB_SEARCH_PREFIX = '?';
 const FILE_SEARCH_PREFIX = '~';
 const SHELF_PREFIX = '#';
+/** "!": the power actions (lock, suspend, switch user, log out, restart, power off), as rows. */
+const POWER_PREFIX = '!';
+/** GNOME's system actions shown as power actions, in this order (systemActions.js ids). */
+const POWER_ACTIONS = ['lock-screen', 'suspend', 'switch-user', 'logout', 'restart', 'power-off'];
 // "*": every app, as the menu once opened with (favourites first); "* text" searches them. An empty search shows the
 // apps open now.
 const ALL_APPS_PREFIX = '*';
@@ -624,7 +629,9 @@ export default class EssentialMenu {
             bottom = this._settings?.get_string('menu-search-position') === 'bottom';
         } catch (e) {}
         if (bottom) {
-            launcher.set_child_above_sibling(search, hints);
+            // Last of all, below the hints and the power buttons, nearest the bottom edge.
+            const power = this._powerRow?.get_parent() === launcher ? this._powerRow : null;
+            launcher.set_child_above_sibling(search, power ?? hints);
             search.set_style('spacing: 8px; margin-top: 10px');
         } else {
             launcher.set_child_below_sibling(search, results);
@@ -703,6 +710,8 @@ export default class EssentialMenu {
             }
             this._ensureLauncher();
             this._syncHighlightStyle();
+            this._syncPowerRow();
+            this._clock?.start();
             this._syncSearchPosition();
             this._positionLauncher();
             this._setSearchText('');
@@ -894,6 +903,7 @@ export default class EssentialMenu {
             return;
         }
         this._stopRowBlink();
+        this._clock?.stop();
         // A resize under way left where it is, its rows back as laid out.
         if (this._resultsEase) {
             this._stopResultsEase();
@@ -1042,6 +1052,18 @@ export default class EssentialMenu {
         bindKey('menu-show-panel-icon', () => this._syncPanelIcon());
         bindKey('menu-highlight-style', () => this._syncHighlightStyle());
         bindKey('menu-search-position', () => this._syncSearchPosition());
+        bindKey('menu-clock', () => {
+            if (this._isOpen) this._clock?.restyle();
+            else if (this._clock) this._clock.actor.visible = Boolean(this._clock.style);
+            this._syncPowerRow();
+            this._updateResultsHeight();
+            this._keepAboveCapsule();
+        });
+        bindKey('menu-power-buttons', () => {
+            this._syncPowerRow();
+            this._updateResultsHeight();
+            this._keepAboveCapsule();
+        });
         bindKey('menu-panel-icon', () => this._syncPanelIconImage());
         bindKey('menu-panel-icon-placement', () => {
             this._syncPanelIconPlacement();
@@ -2137,6 +2159,8 @@ export default class EssentialMenu {
         if (!this._launcher) return;
 
         this._stopResultsEase();
+        this._clock?.stop();
+        this._clock = null;
         this._disconnectStageCapture();
         this._cancelSearchFocus();
         this._cancelFileSearch();
@@ -2317,7 +2341,7 @@ export default class EssentialMenu {
         const helpRow = new St.BoxLayout({
             x_expand: true,
             x_align: Clutter.ActorAlign.CENTER,
-            style: `spacing: 8px; padding-top: 10px; border-top: 1px solid ${this._isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)'}; margin-top: 6px`
+            style: `spacing: 6px; padding-top: 10px; border-top: 1px solid ${this._isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)'}; margin-top: 6px`
         });
 
         // Pills (stylesheet.css: island-menu-hint), their prefix in the system's accent colour.
@@ -2347,13 +2371,52 @@ export default class EssentialMenu {
             return button;
         };
 
-        helpRow.add_child(createHelpBadge(' * ', 'All Apps', ALL_APPS_PREFIX));
+        helpRow.add_child(createHelpBadge(' * ', 'Apps', ALL_APPS_PREFIX));
         helpRow.add_child(createHelpBadge(' = ', 'Calculator', CALCULATOR_PREFIX));
         helpRow.add_child(createHelpBadge(' ? ', 'Web Search', WEB_SEARCH_PREFIX));
         helpRow.add_child(createHelpBadge(' ~ ', 'File Search', FILE_SEARCH_PREFIX));
         helpRow.add_child(createHelpBadge(' # ', 'Shelf', SHELF_PREFIX));
+        helpRow.add_child(createHelpBadge(' ! ', 'Power', POWER_PREFIX));
         this._helpRow = helpRow;
         this._launcher.add_child(helpRow);
+        // The row below follows the hints' width as they are laid out (`_matchHintsWidth`).
+        helpRow.connect('notify::width', () => this._matchHintsWidth());
+
+        // Under the hints: Settings → Clock on the left (clock.js), Settings → Power buttons on the right, a round
+        // button per action, Power off last in red (stylesheet.css: island-menu-power).
+        // As wide as the hints above it and centred as they are, so the two rows start and end together
+        // (`_syncPowerRow` gives it their width).
+        const powerRow = new St.BoxLayout({
+            x_align: Clutter.ActorAlign.CENTER,
+            style: 'spacing: 6px; margin-top: 8px'
+        });
+        try {
+            this._clock = new MenuClock(this._settings);
+            powerRow.add_child(this._clock.actor);
+        } catch (e) {
+            logError(`The clock could not be made: ${e.message}`);
+            this._clock = null;
+        }
+        powerRow.add_child(new St.Widget({x_expand: true}));
+        this._powerButtons = new Map();
+        for (const id of POWER_ACTIONS) {
+            const icon = new St.Icon({icon_name: 'system-shutdown-symbolic', icon_size: 14});
+            const button = new St.Button({
+                reactive: true,
+                can_focus: true,
+                track_hover: true,
+                style_class: id === 'power-off' ? 'island-menu-power island-menu-power-off' : 'island-menu-power',
+                child: icon,
+                visible: false
+            });
+            button._icon = icon;
+            button.connect('clicked', () => this._activatePowerAction(id));
+            powerRow.add_child(button);
+            this._powerButtons.set(id, button);
+        }
+        this._powerRow = powerRow;
+        this._launcher.add_child(powerRow);
+        this._syncPowerRow();
     }
 
     _setScrollViewChild(scrollView, child) {
@@ -2972,6 +3035,11 @@ export default class EssentialMenu {
             return;
         }
 
+        if (rawQuery.startsWith(POWER_PREFIX)) {
+            this._renderPowerResult(rawQuery.slice(POWER_PREFIX.length).trim());
+            return;
+        }
+
         // "*": all apps; "* text": a search of them, as typing a name is.
         const allApps = rawQuery.startsWith(ALL_APPS_PREFIX);
         const appQuery = allApps ? normalize(rawQuery.slice(ALL_APPS_PREFIX.length)).trim() : normalizedQuery;
@@ -3549,6 +3617,87 @@ export default class EssentialMenu {
         }
         this._updateSelection();
         this._updateResultsHeight();
+    }
+
+    /** "!": the power actions GNOME allows now, as rows ("! re" narrows them: restart), picked as any result is. */
+    _renderPowerResult(query) {
+        const wanted = normalize(query).trim();
+        const records = this._powerActionRecords().filter(record => !wanted || record.haystack.includes(wanted));
+        if (records.length === 0) {
+            this._showInfoLabel(wanted ? 'No matching power action' : 'No power actions allowed now');
+            this._updateResultsHeight();
+            return;
+        }
+        records.forEach((record, i) => this._populatePoolButton(i, record));
+        this._updateSelection();
+        this._updateResultsHeight();
+    }
+
+    /** GNOME's power actions allowed now, in `POWER_ACTIONS`' order. */
+    _powerActionRecords() {
+        const order = id => POWER_ACTIONS.indexOf(id);
+        return this._systemActionRecords()
+            .filter(record => order(record.actionId) >= 0)
+            .sort((a, b) => order(a.actionId) - order(b.actionId));
+    }
+
+    /** Settings → Power buttons: the row under the hints (a button per action allowed now),
+     * shown or hidden, its buttons as GNOME allows them now (looked at as the menu opens). */
+    _syncPowerRow() {
+        const row = this._powerRow;
+        if (!row) return;
+        let on = true;
+        try {
+            on = this._settings?.get_boolean('menu-power-buttons') ?? true;
+        } catch (e) {}
+        // The row while either it or the clock is on, as wide as the hints above it.
+        row.visible = on || Boolean(this._clock?.style);
+        this._matchHintsWidth();
+        if (!on) {
+            this._powerButtons?.forEach(button => (button.visible = false));
+            return;
+        }
+        let actions = null;
+        try {
+            actions = SystemActions.getDefault();
+        } catch (e) {}
+        for (const [id, button] of this._powerButtons ?? []) {
+            const action = actions?._actions?.get?.(id);
+            button.visible = Boolean(action?.available);
+            if (button.visible) {
+                const name = actions.getName(id) || id;
+                button.accessible_name = name;
+                button._icon.icon_name = actions.getIconName(id) || 'system-shutdown-symbolic';
+            }
+        }
+    }
+
+    /** The row under the hints as wide as they are. From their width as laid out when they have one, else as they
+     * ask: at the first opening after login the theme is not on them yet, and what they ask then is not what they
+     * get (the row was left wider until the menu opened again). */
+    _matchHintsWidth() {
+        const row = this._powerRow, hints = this._helpRow;
+        if (!row || !hints) return;
+        try {
+            const laid = hints.has_allocation() ? Math.ceil(hints.get_allocation_box().get_width()) : 0;
+            const width = laid > 0 ? laid : Math.ceil(hints.get_preferred_width(-1)[1] ?? 0);
+            if (width > 0 && row.width !== width)
+                row.set_width(width);
+        } catch (e) {}
+    }
+
+    /** One of the power buttons pressed: the menu closed, then the action done as GNOME does it (Power Off and
+     * Restart through its own dialog, with its countdown). */
+    _activatePowerAction(id) {
+        this.close();
+        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+            try {
+                SystemActions.getDefault().activateAction(id);
+            } catch (e) {
+                logError(`Power action ${id} failed: ${e.message}`);
+            }
+            return GLib.SOURCE_REMOVE;
+        });
     }
 
     _renderShelfResult(query) {

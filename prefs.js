@@ -214,6 +214,13 @@ export default class IslandMenuPreferences extends ExtensionPreferences {
         ]));
         look.add(switchRow(settings, 'menu-animations-enabled', 'Animations', 'The menu animates as it opens and closes'));
         look.add(switchRow(settings, 'menu-backdrop-dim-enabled', 'Dim the screen', 'Behind the menu while it is open'));
+        look.add(choiceRow(settings, 'menu-clock', 'Clock', [
+            ['flip', 'Flip digits', 'A changed digit flips over; with the date and your next event'],
+            ['sun', 'Sun arc', 'The time beside a sun or moon on its arc across the day; with the date and your next event'],
+            ['off', 'Off', 'No clock in the menu'],
+        ]));
+        look.add(switchRow(settings, 'menu-power-buttons', 'Power buttons',
+            'Lock, suspend, log out, restart and power off under the hints; ! lists them too'));
         look.add(choiceRow(settings, 'menu-switch-glass', 'Glass during workspace switches', [
             ['always', 'Held still', 'Blurred again once the switch is over; lightest on the CPU'],
             ['battery', 'Held still on battery', 'Live when plugged in'],

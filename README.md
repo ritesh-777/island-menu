@@ -125,6 +125,13 @@ Open the Extensions app, find **Island Menu**, and click the settings button. Se
   off, GNOME's own switchers have them again.
 - **Super key opens the menu** — Instead of the overview, which stays on the Activities button and Super+A.
 - **Keyboard shortcut** — Super+Space by default.
+- **Clock** — at the left of the row under the hints: flip digits (default) or the time beside a sun or moon on
+  its arc across the day (golden and blue hours in their colours, from GNOME's weather place's sunrise and sunset), or
+  off. With the date, your next event of GNOME's calendar within the hour ("Standup · 12 min"), and a moon while
+  Do Not Disturb is on. It runs only while the menu is open.
+- **Power buttons** — a row under the hints: lock, suspend, switch user (with other users), log out, restart and
+  power off (restart and power off through GNOME's own dialog). The **! Power** hint, or typing `!`, lists the same
+  actions as rows, `! re` narrowing them; on even with the row hidden.
 - **Search field** — at the top (default) or the bottom of the launcher: below the results and the hints, nearest
   its bottom edge (good with the launcher at the bottom of the screen).
 - **Highlight style** — how the focused search field and the chosen app look: Classic (default), Glass lens, Accent

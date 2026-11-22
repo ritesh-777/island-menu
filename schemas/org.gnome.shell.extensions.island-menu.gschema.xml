@@ -41,6 +41,21 @@
       <summary>Glass during workspace switches</summary>
       <description>The menu's own glass as a workspace switch slides under it (the menu kept open on empty workspaces), apart from Panel Island's setting for its glass. always: held still (blurred again once the switch is over), lightest on the CPU. battery: held still on battery only, live on mains. never: live, following the slide every frame. live-efficient: live, blurred at half resolution.</description>
     </key>
+    <key name="menu-clock" type="s">
+      <choices>
+        <choice value="flip"/>
+        <choice value="sun"/>
+        <choice value="off"/>
+      </choices>
+      <default>'flip'</default>
+      <summary>Clock</summary>
+      <description>A clock at the left of the row under the hints, with the date, the next event of GNOME's calendar within the hour, and a moon with Do Not Disturb on. flip: flip digits, a changed digit flipping over. sun: the time beside a sun (or moon) on its arc across the day. off: none. It runs only while the menu is open.</description>
+    </key>
+    <key name="menu-power-buttons" type="b">
+      <default>true</default>
+      <summary>Power buttons</summary>
+      <description>A row under the hints with a button for each power action GNOME allows now: lock, suspend, switch user, log out, restart and power off (restart and power off through GNOME's own dialog).</description>
+    </key>
     <key name="menu-search-position" type="s">
       <choices>
         <choice value="top"/>

@@ -113,7 +113,7 @@
 
 /* The mode hints under the results: pills, their prefix in the accent colour. */
 .island-menu-hint {
-    padding: 3px 10px;
+    padding: 3px 8px;
     border-radius: 99px;
     background-color: rgba(255, 255, 255, 0.06);
     transition-duration: 120ms;
@@ -137,6 +137,119 @@
 .island-menu-hint-label {
     font-size: 11px;
     color: rgba(255, 255, 255, 0.64);
+}
+
+/* Settings → Clock (clock.js): at the left of the row under the hints. Tabular figures keep its width still. */
+.island-menu-clock {
+    spacing: 7px;
+    color: rgba(255, 255, 255, 0.92);
+    font-size: 13px;
+}
+
+.island-menu-clock StLabel {
+    font-feature-settings: "tnum";
+}
+
+.island-menu-clock-tiles {
+    spacing: 2px;
+}
+
+.island-menu-clock-tile {
+    background-color: rgba(255, 255, 255, 0.12);
+    border-radius: 5px;
+    min-width: 0.8em;
+    padding: 2px 3px;
+}
+
+.island-menu-clock-tile-label,
+.island-menu-clock-time {
+    font-weight: bold;
+}
+
+.island-menu-clock-colon {
+    padding: 0 1px;
+    font-weight: bold;
+}
+
+.island-menu-clock-stack-label {
+    font-size: 8px;
+    font-weight: bold;
+    letter-spacing: 0.04em;
+}
+
+.island-menu-clock-meridiem {
+    font-size: 10px;
+    font-weight: bold;
+    letter-spacing: 0.05em;
+}
+
+.island-menu-clock-date {
+    font-size: 12px;
+}
+
+.island-menu-clock-arc {
+    width: 30px;
+    height: 18px;
+}
+
+.island-menu-clock-dnd {
+    icon-size: 13px;
+}
+
+.island-menu-clock-event {
+    spacing: 5px;
+    padding: 2px 8px;
+    border-radius: 99px;
+    background-color: rgba(127, 119, 221, 0.32);
+}
+
+.island-menu-clock-event-now {
+    background-color: -st-accent-color;
+}
+
+.island-menu-clock-event-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 3px;
+    background-color: -st-accent-color;
+}
+
+.island-menu-clock-event-now .island-menu-clock-event-dot {
+    background-color: rgba(255, 255, 255, 0.9);
+}
+
+.island-menu-clock-event-text {
+    font-size: 11px;
+}
+
+/* Settings → Power buttons: round, quiet, as the hints are; Power off in red. */
+.island-menu-power {
+    width: 28px;
+    height: 28px;
+    border-radius: 99px;
+    background-color: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.72);
+    transition-duration: 120ms;
+}
+
+.island-menu-power:hover,
+.island-menu-power:focus {
+    background-color: rgba(255, 255, 255, 0.14);
+    color: #ffffff;
+}
+
+.island-menu-power:active {
+    background-color: st-transparentize(-st-accent-color, 0.6);
+}
+
+.island-menu-power-off {
+    color: #ff7b72;
+}
+
+.island-menu-power-off:hover,
+.island-menu-power-off:focus {
+    background-color: rgba(255, 90, 80, 0.22);
+    color: #ffffff;
 }
 
 /* Settings → Style, light: the same, for frosted light glass, in GNOME's light colours (its text black at 80%). */
@@ -174,6 +287,44 @@
     background-color: st-transparentize(-st-accent-color, 0.7) !important;
     box-shadow: inset 0 0 0 1px st-transparentize(-st-accent-color, 0.4) !important;
     color: rgba(0, 0, 0, 0.9) !important;
+}
+
+.essential-menu-light .island-menu-clock {
+    color: rgba(0, 0, 0, 0.82);
+}
+
+.essential-menu-light .island-menu-clock-tile {
+    background-color: rgba(0, 0, 0, 0.07);
+}
+
+.essential-menu-light .island-menu-clock-event {
+    background-color: rgba(127, 119, 221, 0.2);
+}
+
+.essential-menu-light .island-menu-clock-event-now {
+    background-color: -st-accent-color;
+    color: #ffffff;
+}
+
+.essential-menu-light .island-menu-power {
+    background-color: rgba(0, 0, 0, 0.05);
+    color: rgba(0, 0, 0, 0.7);
+}
+
+.essential-menu-light .island-menu-power:hover,
+.essential-menu-light .island-menu-power:focus {
+    background-color: rgba(0, 0, 0, 0.1);
+    color: rgba(0, 0, 0, 0.9);
+}
+
+.essential-menu-light .island-menu-power-off {
+    color: #c0392b;
+}
+
+.essential-menu-light .island-menu-power-off:hover,
+.essential-menu-light .island-menu-power-off:focus {
+    background-color: rgba(192, 57, 43, 0.14);
+    color: #a93226;
 }
 
 .essential-menu-light .island-menu-hint {
