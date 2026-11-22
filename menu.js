@@ -2392,11 +2392,29 @@ export default class EssentialMenu {
                 naturalHeight = this._visibleRecords.length * 48;
             }
             
-            // Set the scroll view height dynamically to fit the contents perfectly
+            // Set the scroll view height dynamically to fit the contents perfectly: eased there while the launcher is
+            // open and shown (a search narrowing or widening), at once otherwise (opening, hidden, animations off). A
+            // new height while easing carries on from where it is.
             const targetHeight = Math.min(maxResultsHeight, naturalHeight);
-            if (this._resultsScrollView.get_height() !== targetHeight) {
-                this._resultsScrollView.set_height(targetHeight);
-                this._keepAboveCapsule();
+            const view = this._resultsScrollView;
+            if (this._resultsHeightTarget !== targetHeight || (!view.get_transition('height') && view.get_height() !== targetHeight)) {
+                this._resultsHeightTarget = targetHeight;
+                const current = view.get_height();
+                const animate = (this._settings?.get_boolean('menu-animations-enabled') ?? true) &&
+                    St.Settings.get().enable_animations && this._isOpen && !this._isAnimatingOpen && view.mapped &&
+                    current > 0 && Math.abs(current - targetHeight) > 2;
+                view.remove_transition('height');
+                if (animate) {
+                    view.ease({
+                        height: targetHeight,
+                        duration: 160,
+                        mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
+                        onStopped: () => this._keepAboveCapsule(),
+                    });
+                } else {
+                    view.set_height(targetHeight);
+                    this._keepAboveCapsule();
+                }
             }
         } catch (e) {
             logError(`Failed to update results height: ${e.message}`);
